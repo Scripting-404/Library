@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-23T13:54:24.958Z",
+  "updated": "2026-09-23T13:54:34.121Z",
   "animations": [
     {
       "id": 94899226966771,
@@ -49,6 +49,14 @@
       "status": "unverified",
       "creator": "realalzzmy",
       "lastChecked": "2026-09-23T13:54:24.654Z"
+    },
+    {
+      "id": 132329525470837,
+      "name": "Emote Bomb",
+      "rig": "Unknown",
+      "status": "unverified",
+      "creator": "realalzzmy",
+      "lastChecked": "2026-09-23T13:54:33.808Z"
     }
   ]
 }
