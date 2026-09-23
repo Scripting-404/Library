@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-23T13:57:05.918Z",
+  "updated": "2026-09-23T14:03:53.395Z",
   "animations": [
     {
       "id": 94899226966771,
@@ -121,6 +121,14 @@
       "status": "unverified",
       "creator": "realalzzmy",
       "lastChecked": "2026-09-23T13:57:05.630Z"
+    },
+    {
+      "id": 186934658,
+      "name": "SnowmanSwordSlash",
+      "rig": "Unknown",
+      "status": "unverified",
+      "creator": "Roblox",
+      "lastChecked": "2026-09-23T14:03:53.119Z"
     }
   ]
 }
