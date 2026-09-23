@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-23T13:55:28.304Z",
+  "updated": "2026-09-23T13:55:41.310Z",
   "animations": [
     {
       "id": 94899226966771,
@@ -73,6 +73,14 @@
       "status": "unverified",
       "creator": "realalzzmy",
       "lastChecked": "2026-09-23T13:55:28.004Z"
+    },
+    {
+      "id": 126551981390641,
+      "name": "KeyframeSequence",
+      "rig": "Unknown",
+      "status": "unverified",
+      "creator": "realalzzmy",
+      "lastChecked": "2026-09-23T13:55:41.015Z"
     }
   ]
 }
