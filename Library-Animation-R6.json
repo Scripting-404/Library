@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-23T13:53:39.044Z",
+  "updated": "2026-09-23T13:53:49.044Z",
   "animations": [
     {
       "id": 94899226966771,
@@ -17,6 +17,14 @@
       "status": "unverified",
       "creator": "realalzzmy",
       "lastChecked": "2026-09-23T13:53:38.764Z"
+    },
+    {
+      "id": 83780103903828,
+      "name": "Garry's dance",
+      "rig": "Unknown",
+      "status": "unverified",
+      "creator": "realalzzmy",
+      "lastChecked": "2026-09-23T13:53:48.764Z"
     }
   ]
 }
