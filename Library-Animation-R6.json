@@ -1,5 +1,14 @@
 {
   "version": 1,
-  "updated": "2026-09-23T13:53:03.235Z",
-  "animations": []
+  "updated": "2026-09-23T13:53:27.719Z",
+  "animations": [
+    {
+      "id": 94899226966771,
+      "name": "Take The L",
+      "rig": "Unknown",
+      "status": "unverified",
+      "creator": "realalzzmy",
+      "lastChecked": "2026-09-23T13:53:27.393Z"
+    }
+  ]
 }
