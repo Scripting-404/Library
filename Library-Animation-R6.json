@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-23T13:53:49.044Z",
+  "updated": "2026-09-23T13:54:00.278Z",
   "animations": [
     {
       "id": 94899226966771,
@@ -25,6 +25,14 @@
       "status": "unverified",
       "creator": "realalzzmy",
       "lastChecked": "2026-09-23T13:53:48.764Z"
+    },
+    {
+      "id": 99984079298234,
+      "name": "california_r6",
+      "rig": "Unknown",
+      "status": "unverified",
+      "creator": "realalzzmy",
+      "lastChecked": "2026-09-23T13:53:59.987Z"
     }
   ]
 }
