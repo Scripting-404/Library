@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-23T13:55:41.310Z",
+  "updated": "2026-09-23T13:55:59.651Z",
   "animations": [
     {
       "id": 94899226966771,
@@ -81,6 +81,14 @@
       "status": "unverified",
       "creator": "realalzzmy",
       "lastChecked": "2026-09-23T13:55:41.015Z"
+    },
+    {
+      "id": 132885213250574,
+      "name": "Stephanie",
+      "rig": "Unknown",
+      "status": "unverified",
+      "creator": "realalzzmy",
+      "lastChecked": "2026-09-23T13:55:59.367Z"
     }
   ]
 }
