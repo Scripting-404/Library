@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-23T13:56:55.113Z",
+  "updated": "2026-09-23T13:57:05.918Z",
   "animations": [
     {
       "id": 94899226966771,
@@ -113,6 +113,14 @@
       "status": "unverified",
       "creator": "realalzzmy",
       "lastChecked": "2026-09-23T13:56:54.823Z"
+    },
+    {
+      "id": 129956413543358,
+      "name": "boombox 2",
+      "rig": "Unknown",
+      "status": "unverified",
+      "creator": "realalzzmy",
+      "lastChecked": "2026-09-23T13:57:05.630Z"
     }
   ]
 }
