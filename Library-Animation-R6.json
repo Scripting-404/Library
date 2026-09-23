@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-09-23T13:56:44.319Z",
+  "updated": "2026-09-23T13:56:55.113Z",
   "animations": [
     {
       "id": 94899226966771,
@@ -105,6 +105,14 @@
       "status": "unverified",
       "creator": "realalzzmy",
       "lastChecked": "2026-09-23T13:56:43.980Z"
+    },
+    {
+      "id": 102908990958263,
+      "name": "hakari",
+      "rig": "Unknown",
+      "status": "unverified",
+      "creator": "realalzzmy",
+      "lastChecked": "2026-09-23T13:56:54.823Z"
     }
   ]
 }
