@@ -19,7 +19,7 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local TextService = game:GetService("TextService")
 
-local Library = { Windows = {}, Version = "3.0" }
+local Library = { Windows = {}, Version = "4.0" }
 
 --------------------------------------------------------------------
 -- Icons
@@ -74,14 +74,14 @@ end
 -- Theme & helpers
 --------------------------------------------------------------------
 local BaseTheme = {
-	Background = Color3.fromRGB(12, 12, 14),
-	Panel = Color3.fromRGB(22, 22, 25),
-	Element = Color3.fromRGB(33, 33, 37),
-	ElementHover = Color3.fromRGB(45, 45, 51),
-	Stroke = Color3.fromRGB(62, 62, 68),
-	Text = Color3.fromRGB(245, 245, 248),
-	SubText = Color3.fromRGB(152, 152, 160),
-	Accent = Color3.fromRGB(220, 220, 228),
+	Background = Color3.fromRGB(10, 10, 12),
+	Panel = Color3.fromRGB(20, 20, 23),
+	Element = Color3.fromRGB(29, 29, 33),
+	ElementHover = Color3.fromRGB(42, 42, 47),
+	Stroke = Color3.fromRGB(58, 58, 65),
+	Text = Color3.fromRGB(242, 242, 245),
+	SubText = Color3.fromRGB(145, 145, 154),
+	Accent = Color3.fromRGB(185, 185, 194),
 	Danger = Color3.fromRGB(225, 75, 75),
 }
 
@@ -161,11 +161,11 @@ function Library:CreateWindow(cfg)
 	local conns = {}
 	local function track(c) table.insert(conns, c) return c end
 
-	local minSize = cfg.MinSize or Vector2.new(400, 280)
-	local maxSize = cfg.MaxSize or Vector2.new(1000, 700)
-	local startSize = cfg.Size or Vector2.new(620, 420)
+	local minSize = cfg.MinSize or Vector2.new(320, 220)
+	local maxSize = cfg.MaxSize or Vector2.new(1100, 760)
+	local startSize = cfg.Size or Vector2.new(680, 440)
 	local toggleKey = cfg.ToggleKey or Enum.KeyCode.RightShift
-	local title = cfg.Title or "CyberUI"
+	local title = cfg.Title or "Scripting404"
 
 	local HEADER_H, PAD = 46, 8
 	local SB_WIDE, SB_NARROW = 158, 52
@@ -220,7 +220,7 @@ function Library:CreateWindow(cfg)
 	----------------------------------------------------------------
 	-- Config storage (auto save / auto load)
 	----------------------------------------------------------------
-	local folder = cfg.ConfigFolder or "CyberUI"
+	local folder = cfg.ConfigFolder or "Scripting404"
 	local canFS = (writefile and readfile and isfile) and true or false
 	local function cfgPath(name) return folder .. "/" .. name .. ".json" end
 	local saved = {}
@@ -349,6 +349,18 @@ function Library:CreateWindow(cfg)
 		local x = math.clamp(main.Position.X.Offset, 0, math.max(0, vp.X - w))
 		local y = math.clamp(main.Position.Y.Offset, 0, math.max(0, vp.Y - h))
 		main.Position = UDim2.fromOffset(x, y)
+	end
+
+	-- Hard viewport boundary: the window can never remain outside the screen.
+	local function ClampWindowToViewport()
+		if not main or not main.Parent or main.AnchorPoint ~= Vector2.new(0, 0) then return end
+		local vp = localVP()
+		local w, h = main.Size.X.Offset, main.Size.Y.Offset
+		local x = math.clamp(main.Position.X.Offset, 0, math.max(0, vp.X - w))
+		local y = math.clamp(main.Position.Y.Offset, 0, math.max(0, vp.Y - h))
+		if x ~= main.Position.X.Offset or y ~= main.Position.Y.Offset then
+			main.Position = UDim2.fromOffset(x, y)
+		end
 	end
 
 	----------------------------------------------------------------
@@ -592,7 +604,7 @@ function Library:CreateWindow(cfg)
 		Clamp = function(x, y)
 			local vp = localVP()
 			local w = main.Size.X.Offset
-			return math.clamp(x, 60 - w, vp.X - 60), math.clamp(y, 0, vp.Y - 40)
+			return math.clamp(x, 0, math.max(0, vp.X - w)), math.clamp(y, 0, math.max(0, vp.Y - 40))
 		end,
 	})
 
@@ -1632,6 +1644,18 @@ function Library:CreateWindow(cfg)
 	local tbL = { State = {}, Hover = {}, Click = {} }
 	local BuildToggleButton
 
+	local function ClampToggleButton()
+		if not toggleBtn or not toggleBtn.Parent then return end
+		local vp = localVP()
+		local w, h = toggleBtn.Size.X.Offset, toggleBtn.Size.Y.Offset
+		local p = toggleBtn.Position
+		local x = (p.X.Scale * vp.X) + p.X.Offset
+		local y = (p.Y.Scale * vp.Y) + p.Y.Offset
+		x = math.clamp(x, w * 0.5, math.max(w * 0.5, vp.X - w * 0.5))
+		y = math.clamp(y, h * 0.5, math.max(h * 0.5, vp.Y - h * 0.5))
+		toggleBtn.Position = UDim2.fromOffset(x, y)
+	end
+
 	local function ClearToggle()
 		for _, c in ipairs(tbJan) do pcall(function() c:Disconnect() end) end
 		table.clear(tbJan)
@@ -1649,6 +1673,7 @@ function Library:CreateWindow(cfg)
 		local size = opts.Size or 46
 		toggleBtn.Size = UDim2.fromOffset(size, size)
 		if opts.Position then toggleBtn.Position = opts.Position end
+		ClampToggleButton()
 
 		local transparent = opts.Transparent == true
 		local hasBg = (not transparent) and opts.Background ~= false
@@ -1938,6 +1963,38 @@ function Library:CreateWindow(cfg)
 	end
 	function Window:SetAutoSave(on) Window.AutoSave = on and true or false end
 
+	function Window:SetPosition(x, y)
+		if Window.Destroyed then return end
+		local vp = localVP()
+		local w, h = main.Size.X.Offset, main.Size.Y.Offset
+		main.Position = UDim2.fromOffset(
+			math.clamp(tonumber(x) or 0, 0, math.max(0, vp.X - w)),
+			math.clamp(tonumber(y) or 0, 0, math.max(0, vp.Y - h))
+		)
+	end
+
+	function Window:GetPosition()
+		return main.Position.X.Offset, main.Position.Y.Offset
+	end
+
+	function Window:SetSize(w, h)
+		if Window.Destroyed then return end
+		local cw, ch = clampSize(tonumber(w) or main.Size.X.Offset, tonumber(h) or main.Size.Y.Offset)
+		main.Size = UDim2.fromOffset(cw, ch)
+		FitToScreen()
+		ClampWindowToViewport()
+	end
+
+	function Window:GetSize()
+		return main.Size.X.Offset, main.Size.Y.Offset
+	end
+
+	function Window:Center()
+		local vp = localVP()
+		local w, h = main.Size.X.Offset, main.Size.Y.Offset
+		main.Position = UDim2.fromOffset(math.max(0, (vp.X - w) / 2), math.max(0, (vp.Y - h) / 2))
+	end
+
 	-- config ---------------------------------------------------------
 	function Window:SaveConfig(name)
 		if not canFS then return false end
@@ -1990,13 +2047,13 @@ function Library:CreateWindow(cfg)
 
 	-- tab pengaturan bawaan -------------------------------------------
 	function Window:CreateSettingsTab(name, icon)
-		local tab = Window:CreateTab(name or "Settings", icon or "settings")
+		local tab = Window:CreateTab(name or "Scripting404 Settings", icon or "settings")
 
 		local ui = tab:AddGroup("Interface", { Icon = "monitor" })
 		ui:AddColorPicker({ Name = "Accent Color", Flag = "ui_accent", Default = theme.Accent, Keywords = "warna tema theme", Callback = function(c) Window:SetAccent(c) end })
 		ui:AddToggle({ Name = "Blackhole Background", Flag = "ui_bg", Default = true, Keywords = "animasi background", Callback = function(v) Window:SetBackground(v) end })
-		ui:AddToggle({ Name = "Auto Scale (Responsive)", Flag = "ui_autoscale", Default = autoScale, Keywords = "ukuran layar dpi", Callback = function(v) Window:SetAutoScale(v) end })
-		ui:AddSlider({ Name = "UI Scale", Flag = "ui_scale", Min = 0.6, Max = 1.4, Default = userScale, Increment = 0.05, Keywords = "ukuran besar kecil", Callback = function(v) Window:SetScale(v) end })
+		ui:AddToggle({ Name = "Auto Scale (Responsive)", Flag = "ui_autoscale", Default = autoScale, Keywords = "ukuran layar dpi responsive phone tablet", Callback = function(v) Window:SetAutoScale(v) end })n layar dpi", Callback = function(v) Window:SetAutoScale(v) end })
+		ui:AddSlider({ Name = "UI Scale", Flag = "ui_scale", Min = 0.6, Max = 1.4, Default = userScale, Increment = 0.05, Keywords = "ukuran besar kecil zoom", Callback = function(v) Window:SetScale(v) end })n = 0.6, Max = 1.4, Default = userScale, Increment = 0.05, Keywords = "ukuran besar kecil", Callback = function(v) Window:SetScale(v) end })
 		ui:AddDropdown({ Name = "Sidebar", Flag = "ui_sidebar", Options = { "Auto", "Expanded", "Collapsed" }, Default = "Auto", Callback = function(v) Window:SetSidebar(v) end })
 		ui:AddKeybind({ Name = "Toggle UI Key", Flag = "ui_togglekey", Default = toggleKey, Keywords = "hotkey tombol", Changed = function(k)
 			if k ~= Enum.KeyCode.Unknown then toggleKey = k end
@@ -2038,6 +2095,7 @@ function Library:CreateWindow(cfg)
 	Layout(false)
 	UpdateHeader()
 
+	local boundaryTick = 0
 	track(RunService.Heartbeat:Connect(function(dt)
 		if main.Visible and bh.Visible then StepBlackhole(dt) end
 		StepRains(dt)
@@ -2045,12 +2103,21 @@ function Library:CreateWindow(cfg)
 			tbT += dt
 			tbAnim(tbT)
 		end
+
+		boundaryTick += dt
+		if boundaryTick >= 0.12 then
+			boundaryTick = 0
+			if main.Visible then ClampWindowToViewport() end
+			if toggleBtn.Visible then ClampToggleButton() end
+		end
 	end))
 
 	track(gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		applyScale()
 		notifHolder.Size = UDim2.fromOffset(notifWidth(), 0)
 		FitToScreen()
+		ClampWindowToViewport()
+		ClampToggleButton()
 	end))
 
 	table.insert(Library.Windows, Window)
