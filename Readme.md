@@ -163,7 +163,7 @@ getgenv().SECURED_ACTION = "Kick"          -- "Kick" | "ServerHop" | "Both"
 getgenv().SECURED_MESSAGE = "Unauthorized hook detected."
 getgenv().SECURED_STRICT = false           -- true: also watch __namecall/__index/__newindex
 
-local Library = loadstring(game:HttpGet("RAW_URL"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting-404/Library/refs/heads/main/Ui-library"))()
 ```
 
 | Option | Default | Description |
