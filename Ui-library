@@ -1,29 +1,3 @@
---[[
-	Scripting404 UI (CyberUI v4)
-	- Judul default "Scripting404", tema default abu-abu & hitam (+ preset: Dark Gray, Graphite, Black, Midnight, Light)
-	- Responsive penuh: auto scale mengikuti layar/DPI, window TIDAK PERNAH keluar batas layar
-	  (drag, resize, ganti ukuran layar, rotasi HP, UI Scale -> selalu di-clamp), Maximize / Restore
-	- Kompatibel executor: cloneref, gethui, protect_gui, fallback HttpGet/request, fallback icon teks
-	  jika library icon gagal dimuat, safe-area (notch), singleton (re-execute otomatis menutup UI lama)
-	- Search semua fitur (Enter = lompat ke hasil pertama, Ctrl+F = fokus search)
-	- Auto save/load config, export/import config (clipboard), theme preset, notifikasi 6 posisi
-	- Elemen: Group, Section, Divider, Label, Paragraph, Tag, Info, Progress, Stat, Image, Code, Console,
-	  Button, Toggle, Slider, Dropdown (Multi + Search), Segmented, Input, TextArea, Keybind, ColorPicker (+hex), Custom
-	- Semua elemen: Description (Button/Toggle), Tooltip, Locked, Visible, :SetVisible() :SetLocked() :Destroy()
-
-	Icon boleh berupa: nama icon ("house", "sfsymbols:HouseFill"), "rbxassetid://123", atau angka 123.
-
-	Contoh:
-		local Library = loadstring(game:HttpGet("URL_SCRIPT_INI"))()
-		local Window = Library:CreateWindow({ Version = "v1.0" })       -- judul default: Scripting404
-		local Tab = Window:CreateTab("Main", "house")
-		Tab:AddToggle({ Name = "Auto Farm", Flag = "farm", Description = "Farm otomatis", Callback = function(v) print(v) end })
-		Window:CreateSettingsTab()
-]]
-
---------------------------------------------------------------------
--- Executor-safe services & env
---------------------------------------------------------------------
 local cloneref = cloneref or function(o) return o end
 local function Service(name)
 	local ok, s = pcall(function() return cloneref(game:GetService(name)) end)
@@ -53,9 +27,6 @@ local function Copy(t)
 	return n
 end
 
---------------------------------------------------------------------
--- HTTP + Icons
---------------------------------------------------------------------
 local function HttpGet(url)
 	local ok, res = pcall(function() return game:HttpGet(url) end)
 	if ok and type(res) == "string" and #res > 0 then return res end
@@ -67,6 +38,204 @@ local function HttpGet(url)
 		if ok and type(res) == "table" and type(res.Body) == "string" and #res.Body > 0 then return res.Body end
 	end
 	return nil
+end
+
+local Secure = { Enabled = false, Triggered = false }
+Library.Secure = Secure
+
+do
+	local trustDepth = 0
+	local probes = {}
+	local watching = false
+
+	local function cfgValue(key, default)
+		local v = genv[key]
+		if v == nil then return default end
+		return v
+	end
+
+	local function safe(fn, ...)
+		local ok, a = pcall(fn, ...)
+		if ok then return a end
+		return nil
+	end
+
+	local function describe(fn)
+		local info = { ref = fn }
+		if type(fn) ~= "function" then return info end
+		if islclosure then info.lua = safe(islclosure, fn) end
+		if isfunctionhooked then info.hooked = safe(isfunctionhooked, fn) end
+		if is_function_hooked then info.hooked = info.hooked or safe(is_function_hooked, fn) end
+		if debug and debug.info then info.src = safe(debug.info, fn, "s") end
+		return info
+	end
+
+	local function resolve(path)
+		local cur = genv
+		for part in string.gmatch(path, "[^%.]+") do
+			if type(cur) ~= "table" then return nil end
+			cur = cur[part]
+		end
+		return cur
+	end
+
+	local function getMeta(name)
+		if not getrawmetatable then return nil end
+		local mt = safe(getrawmetatable, game)
+		if type(mt) ~= "table" then return nil end
+		local ro = safe(function() return isreadonly and isreadonly(mt) end)
+		if ro and setreadonly then pcall(setreadonly, mt, false) end
+		local v = rawget(mt, name)
+		if ro and setreadonly then pcall(setreadonly, mt, true) end
+		return v
+	end
+
+	local targets = {
+		{ "loadstring", function() return resolve("loadstring") end },
+		{ "request", function() return resolve("request") end },
+		{ "http_request", function() return resolve("http_request") end },
+		{ "syn.request", function() return resolve("syn.request") end },
+		{ "http.request", function() return resolve("http.request") end },
+		{ "setclipboard", function() return resolve("setclipboard") end },
+		{ "toclipboard", function() return resolve("toclipboard") end },
+		{ "writefile", function() return resolve("writefile") end },
+		{ "appendfile", function() return resolve("appendfile") end },
+		{ "decompile", function() return resolve("decompile") end },
+		{ "getscriptbytecode", function() return resolve("getscriptbytecode") end },
+		{ "getscriptclosure", function() return resolve("getscriptclosure") end },
+		{ "getrawmetatable", function() return resolve("getrawmetatable") end },
+		{ "hookfunction", function() return resolve("hookfunction") end },
+		{ "hookmetamethod", function() return resolve("hookmetamethod") end },
+		{ "replaceclosure", function() return resolve("replaceclosure") end },
+		{ "newcclosure", function() return resolve("newcclosure") end },
+		{ "debug.info", function() return debug and debug.info end },
+		{ "HttpGet", function()
+			return safe(function() return game.HttpGet end)
+		end, true },
+	}
+
+	local strictTargets = {
+		{ "__namecall", function() return getMeta("__namecall") end },
+		{ "__index", function() return getMeta("__index") end },
+		{ "__newindex", function() return getMeta("__newindex") end },
+	}
+
+	local function capture()
+		table.clear(probes)
+		local list = {}
+		for _, t in ipairs(targets) do table.insert(list, t) end
+		if cfgValue("SECURED_STRICT", false) then
+			for _, t in ipairs(strictTargets) do table.insert(list, t) end
+		end
+		for _, t in ipairs(list) do
+			local a = t[2]()
+			if type(a) == "function" then
+				local first = describe(a)
+				local b = t[2]()
+				local stable = (b == a) and not t[3]
+				probes[t[1]] = { get = t[2], base = first, stable = stable }
+			end
+		end
+	end
+
+	local function check()
+		for name, p in pairs(probes) do
+			local cur = p.get()
+			if type(cur) == "function" then
+				local d = describe(cur)
+				if p.stable and cur ~= p.base.ref then return name end
+				if d.hooked == true and p.base.hooked ~= true then return name end
+				if d.lua == true and p.base.lua == false then return name end
+				if p.base.src ~= nil and d.src ~= nil and d.src ~= p.base.src then return name end
+			elseif p.stable then
+				return name
+			end
+		end
+		return nil
+	end
+
+	local function serverHop()
+		local TeleportService = Service("TeleportService")
+		local lp = Players.LocalPlayer
+		local placeId, jobId = game.PlaceId, game.JobId
+		local target
+		pcall(function()
+			local raw = HttpGet("https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Asc&limit=100")
+			local data = raw and HttpService:JSONDecode(raw)
+			if data and data.data then
+				local pool = {}
+				for _, s in ipairs(data.data) do
+					if s.id ~= jobId and s.playing and s.maxPlayers and s.playing < s.maxPlayers then
+						table.insert(pool, s.id)
+					end
+				end
+				if #pool > 0 then target = pool[math.random(1, #pool)] end
+			end
+		end)
+		pcall(function()
+			if target then
+				TeleportService:TeleportToPlaceInstance(placeId, target, lp)
+			else
+				TeleportService:Teleport(placeId, lp)
+			end
+		end)
+	end
+
+	local function punish(reason)
+		if Secure.Triggered then return end
+		Secure.Triggered = true
+		local action = tostring(cfgValue("SECURED_ACTION", "Kick")):lower()
+		local message = tostring(cfgValue("SECURED_MESSAGE", "Security violation detected: unauthorized hook."))
+		pcall(function() Library:DestroyAll() end)
+		if type(Secure.OnViolation) == "function" then pcall(Secure.OnViolation, reason) end
+		local lp = Players.LocalPlayer
+		if action == "serverhop" or action == "both" then
+			task.spawn(serverHop)
+		end
+		if action == "kick" or action == "both" then
+			pcall(function() lp:Kick(message) end)
+		elseif action == "serverhop" then
+			task.delay(8, function() pcall(function() lp:Kick(message) end) end)
+		end
+	end
+
+	function Secure:Rebaseline()
+		if not Secure.Enabled then return end
+		capture()
+	end
+
+	function Secure:Trust(fn, ...)
+		if type(fn) ~= "function" then return end
+		trustDepth += 1
+		local results = table.pack(pcall(fn, ...))
+		trustDepth -= 1
+		if trustDepth == 0 then Secure:Rebaseline() end
+		if results[1] then return table.unpack(results, 2, results.n) end
+		warn("[Scripting404] Trusted scope error: " .. tostring(results[2]))
+	end
+
+	function Secure:IsEnabled()
+		return Secure.Enabled
+	end
+
+	function Secure:Start()
+		if watching then return end
+		if not cfgValue("SECURED_MODE", false) then return end
+		Secure.Enabled = true
+		watching = true
+		capture()
+		local acc = 0
+		RunService.Heartbeat:Connect(function(dt)
+			if Secure.Triggered or trustDepth > 0 then return end
+			acc += dt
+			if acc < 0.5 then return end
+			acc = 0
+			local bad = check()
+			if bad then punish(bad) end
+		end)
+	end
+
+	Secure:Start()
 end
 
 local IconsV2
@@ -92,7 +261,6 @@ local function ResolveAsset(icon)
 	return nil
 end
 
--- return: isAsset (gambar penuh warna), resolved (icon berhasil dimuat)
 local function SetIcon(label, icon)
 	if icon == nil or icon == "" or icon == false then return false, false end
 	local asset = ResolveAsset(icon)
@@ -128,9 +296,6 @@ local function GlyphFor(icon)
 	return "?"
 end
 
---------------------------------------------------------------------
--- Theme & helpers
---------------------------------------------------------------------
 local BaseTheme = {
 	Background = Color3.fromRGB(15, 15, 17),
 	Panel = Color3.fromRGB(24, 24, 27),
@@ -239,13 +404,9 @@ end
 
 local IS_TOUCH = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
---------------------------------------------------------------------
--- Window
---------------------------------------------------------------------
 function Library:CreateWindow(cfg)
 	cfg = cfg or {}
 
-	-- singleton: re-execute menutup UI lama
 	if cfg.Singleton ~= false then
 		local prev = genv.__Scripting404_Window
 		if prev and type(prev.Destroy) == "function" then pcall(function() prev:Destroy() end) end
@@ -278,11 +439,8 @@ function Library:CreateWindow(cfg)
 	local SB_WIDE, SB_NARROW = 158, 52
 	local maximized = false
 
-	----------------------------------------------------------------
-	-- Theme binding
-	----------------------------------------------------------------
 	local bound, hooks = {}, {}
-	local gui -- forward
+	local gui
 	local function bind(inst, prop, key)
 		inst[prop] = theme[key]
 		table.insert(bound, { inst, prop, key })
@@ -334,9 +492,6 @@ function Library:CreateWindow(cfg)
 		return s
 	end
 
-	----------------------------------------------------------------
-	-- Config storage (auto save / auto load)
-	----------------------------------------------------------------
 	local folder = cfg.ConfigFolder or "Scripting404"
 	local canFS = (writefile and readfile and isfile) and true or false
 	local function cfgPath(name) return folder .. "/" .. name .. ".json" end
@@ -380,11 +535,8 @@ function Library:CreateWindow(cfg)
 		local v = saved[flag]
 		if v ~= nil then pcall(setter, v) end
 	end
-	local function fire(cb, ...) if cb then task.spawn(cb, ...) end end
+	local function fire(cb, ...) if cb then task.spawn(function(...) Library.Secure:Trust(cb, ...) end, ...) end end
 
-	----------------------------------------------------------------
-	-- ScreenGui + responsive scaler
-	----------------------------------------------------------------
 	gui = Create("ScreenGui", {
 		Name = "S404_" .. HttpService:GenerateGUID(false):sub(1, 6),
 		ResetOnSpawn = false,
@@ -428,9 +580,6 @@ function Library:CreateWindow(cfg)
 	local function localVP() return viewport() / uiScale.Scale end
 	applyScale()
 
-	----------------------------------------------------------------
-	-- Main window
-	----------------------------------------------------------------
 	local function allowedMax()
 		local vp = localVP()
 		if maximized then return Vector2.new(vp.X - 16, vp.Y - 16) end
@@ -461,7 +610,6 @@ function Library:CreateWindow(cfg)
 		frame.AnchorPoint = Vector2.new(ax, ay)
 	end
 
-	-- selalu paksa window berada penuh di dalam layar
 	local function FitToScreen()
 		if main.AnchorPoint ~= Vector2.new(0, 0) then return end
 		local vp = localVP()
@@ -472,9 +620,6 @@ function Library:CreateWindow(cfg)
 		main.Position = UDim2.fromOffset(x, y)
 	end
 
-	----------------------------------------------------------------
-	-- Background (blackhole)
-	----------------------------------------------------------------
 	local bh = Create("Frame", { Name = "Blackhole", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, Visible = cfg.Background ~= false, Parent = main })
 	local function Circle(z, transp)
 		local c = F({ AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = transp, ZIndex = z, Parent = bh }, "Accent")
@@ -557,9 +702,6 @@ function Library:CreateWindow(cfg)
 		end
 	end
 
-	----------------------------------------------------------------
-	-- Rain (notifikasi)
-	----------------------------------------------------------------
 	local rains, rainAcc = {}, 0
 	local function NewRain(parent, w, h, color)
 		local rain = { cols = {}, parent = parent, h = h }
@@ -605,9 +747,6 @@ function Library:CreateWindow(cfg)
 		end
 	end
 
-	----------------------------------------------------------------
-	-- Drag helper
-	----------------------------------------------------------------
 	local function MakeDraggable(handle, target, opts)
 		opts = opts or {}
 		local dragging, dragStart, startPos, moved = false, nil, nil, false
@@ -639,9 +778,6 @@ function Library:CreateWindow(cfg)
 		return function() return moved end
 	end
 
-	----------------------------------------------------------------
-	-- Header
-	----------------------------------------------------------------
 	local topbar = Create("Frame", { Name = "Header", Size = UDim2.new(1, 0, 0, HEADER_H), BackgroundTransparency = 1, Active = true, Parent = main })
 
 	local function IconButton(parent, iconName, props, hoverKey)
@@ -682,7 +818,6 @@ function Library:CreateWindow(cfg)
 	local minBtn = IconButton(topbar, "minus", { Size = UDim2.fromOffset(28, 28), Position = UDim2.new(1, -70, 0.5, -14) })
 	local maxBtn = IconButton(topbar, "maximize", { Size = UDim2.fromOffset(28, 28), Position = UDim2.new(1, -102, 0.5, -14) })
 
-	-- search pill
 	local searchPill = F({
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -112, 0.5, 0), Size = UDim2.fromOffset(180, 28), BackgroundTransparency = 0.2, Parent = topbar,
 	}, "Element", { Corner(14), Stk(0.4, 1) })
@@ -717,9 +852,6 @@ function Library:CreateWindow(cfg)
 		end,
 	})
 
-	----------------------------------------------------------------
-	-- Tooltip
-	----------------------------------------------------------------
 	local tip = F({ AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), Visible = false, ZIndex = 200, Parent = scaler }, "Panel", { Corner(6), Stk(0.1, 1), Pad(8, 8, 5, 5) })
 	local tipLabel = L({ AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), Font = Enum.Font.Gotham, TextSize = 11, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 201, Parent = tip }, "Text")
 	Create("UISizeConstraint", { MaxSize = Vector2.new(220, 1000), Parent = tipLabel })
@@ -757,9 +889,6 @@ function Library:CreateWindow(cfg)
 		if tip.Visible and input.UserInputType == Enum.UserInputType.MouseMovement then moveTip() end
 	end))
 
-	----------------------------------------------------------------
-	-- Sidebar card + content card
-	----------------------------------------------------------------
 	local showUser = cfg.ShowUser ~= false
 	local sidebar = F({
 		Name = "Sidebar", Position = UDim2.fromOffset(PAD, HEADER_H), Size = UDim2.new(0, SB_WIDE, 1, -(HEADER_H + PAD)),
@@ -773,7 +902,6 @@ function Library:CreateWindow(cfg)
 		Pad(8, 9, 8, 8),
 	})
 
-	-- profil user
 	local profile = F({
 		Size = UDim2.new(1, -16, 0, 44), Position = UDim2.new(0, 8, 1, -52), BackgroundTransparency = 0.4, Visible = showUser, Parent = sidebar,
 	}, "Element", { Corner(8), Stk(0.5, 1) })
@@ -799,7 +927,6 @@ function Library:CreateWindow(cfg)
 		BackgroundTransparency = 0.45, ClipsDescendants = true, Parent = main,
 	}, "Panel", { Corner(10), Stk(0.5, 1) })
 
-	-- sidebar collapse / responsive layout
 	local sbManual, sbCollapsed = nil, false
 	local sectionLabels = {}
 
@@ -849,11 +976,8 @@ function Library:CreateWindow(cfg)
 		table.insert(sectionLabels, l)
 	end
 
-	----------------------------------------------------------------
-	-- Tabs, search, elements
-	----------------------------------------------------------------
 	local currentTab
-	local SelectTab -- forward
+	local SelectTab
 
 	local searchPage = Create("ScrollingFrame", {
 		Name = "SearchResults", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false,
@@ -929,9 +1053,9 @@ function Library:CreateWindow(cfg)
 		table.sort(results, function(a, b) if a.s ~= b.s then return a.s > b.s end return a.e.name < b.e.name end)
 		firstResult = results[1] and results[1].e or nil
 
-		L({ Size = UDim2.new(1, 0, 0, 18), Font = Enum.Font.GothamBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Text = #results .. " HASIL", LayoutOrder = 0, Parent = searchPage }, "SubText")
+		L({ Size = UDim2.new(1, 0, 0, 18), Font = Enum.Font.GothamBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Text = #results .. " RESULTS", LayoutOrder = 0, Parent = searchPage }, "SubText")
 		if #results == 0 then
-			L({ Size = UDim2.new(1, 0, 0, 40), Font = Enum.Font.Gotham, TextSize = 12, Text = "Tidak ada fitur yang cocok.", LayoutOrder = 1, Parent = searchPage }, "SubText")
+			L({ Size = UDim2.new(1, 0, 0, 40), Font = Enum.Font.Gotham, TextSize = 12, Text = "No matching features.", LayoutOrder = 1, Parent = searchPage }, "SubText")
 			return
 		end
 		for i = 1, math.min(#results, 40) do
@@ -990,7 +1114,6 @@ function Library:CreateWindow(cfg)
 	end
 	function Window:SelectTab(tab) SelectTab(tab) end
 
-	-- elemen generik (dipakai Tab dan Group) --------------------------
 	local function NameLabel(parent, text, w, desc)
 		local lbl = L({
 			Position = UDim2.fromOffset(12, desc and 7 or 0),
@@ -1037,7 +1160,6 @@ function Library:CreateWindow(cfg)
 			return f
 		end
 
-		-- fitur umum semua elemen: Frame, SetVisible, SetLocked, Destroy, Tooltip
 		local function Decorate(obj, f, o)
 			if type(obj) ~= "table" then return end
 			o = type(o) == "table" and o or {}
@@ -1070,7 +1192,6 @@ function Library:CreateWindow(cfg)
 
 		function target:GetPage() return host end
 
-		-- Group (collapsible card) ----------------------------------
 		if not Group then
 			function target:AddGroup(titleText, opts)
 				opts = opts or {}
@@ -1135,7 +1256,6 @@ function Library:CreateWindow(cfg)
 			end
 		end
 
-		-- Section / Divider ------------------------------------------
 		function target:AddSection(text)
 			local f = Create("Frame", { Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, Parent = host })
 			L({ Size = UDim2.fromScale(1, 1), Font = Enum.Font.GothamBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Text = string.upper(text or ""), Parent = f }, "Accent")
@@ -1154,7 +1274,6 @@ function Library:CreateWindow(cfg)
 			return f
 		end
 
-		-- Label / Paragraph -----------------------------------------------
 		function target:AddLabel(text)
 			local f = AutoBase(30)
 			Create("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7), Parent = f })
@@ -1179,7 +1298,6 @@ function Library:CreateWindow(cfg)
 			return { Set = function(_, tt, bb) t.Text = tt or t.Text b.Text = bb or b.Text end }
 		end
 
-		-- Tag ------------------------------------------------------------------
 		function target:AddTag(o)
 			o = o or {}
 			local f = AutoBase(36)
@@ -1216,7 +1334,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Info -------------------------------------------------------------------
 		function target:AddInfo(o)
 			o = o or {}
 			local kind = o.Type or "info"
@@ -1239,7 +1356,6 @@ function Library:CreateWindow(cfg)
 			return { Set = function(_, tt, bb) t.Text = tt or t.Text b.Text = bb or b.Text end }
 		end
 
-		-- Progress -----------------------------------------------------------------
 		function target:AddProgress(o)
 			o = o or {}
 			local value = math.clamp(o.Value or 0, 0, 100)
@@ -1260,7 +1376,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Stat card ------------------------------------------------------------------
 		function target:AddStat(o)
 			o = o or {}
 			local f = Base(54)
@@ -1273,7 +1388,6 @@ function Library:CreateWindow(cfg)
 			return { Set = function(_, v) val.Text = tostring(v) end, Get = function() return val.Text end }
 		end
 
-		-- Image ------------------------------------------------------------------------
 		function target:AddImage(o)
 			o = o or {}
 			local f = Base(o.Height or 120)
@@ -1283,7 +1397,6 @@ function Library:CreateWindow(cfg)
 			return { Set = function(_, image) SetIcon(img, image) end, Instance = img }
 		end
 
-		-- Code --------------------------------------------------------------------------
 		function target:AddCode(o)
 			o = o or {}
 			local code = o.Code or ""
@@ -1298,7 +1411,7 @@ function Library:CreateWindow(cfg)
 			copy.MouseLeave:Connect(function() Tween(copyIcon, 0.15, { ImageColor3 = theme.SubText }) end)
 			copy.MouseButton1Click:Connect(function()
 				local ok = pcall(function() (setclipboard or toclipboard or set_clipboard)(code) end)
-				Window:Notify({ Title = ok and "Copied" or "Gagal", Content = ok and "Kode disalin ke clipboard." or "Clipboard tidak didukung executor ini.", Type = ok and "success" or "error", Duration = 2.5 })
+				Window:Notify({ Title = ok and "Copied" or "Failed", Content = ok and "Code copied to clipboard." or "Clipboard is not supported by this executor.", Type = ok and "success" or "error", Duration = 2.5 })
 			end)
 			local box = F({ Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 2, Parent = f }, "Background", { Corner(5), Pad(8, 8, 8, 8) })
 			local l = L({
@@ -1309,7 +1422,6 @@ function Library:CreateWindow(cfg)
 			return { Set = function(_, c) code = c l.Text = c end }
 		end
 
-		-- Console (log viewer) ----------------------------------------------------------
 		function target:AddConsole(o)
 			o = o or {}
 			local h = o.Height or 120
@@ -1350,7 +1462,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Button ----------------------------------------------------------------------------
 		function target:AddButton(o)
 			o = o or {}
 			local style = o.Style
@@ -1385,7 +1496,6 @@ function Library:CreateWindow(cfg)
 			return { Fire = function() fire(o.Callback) end, SetName = function(_, t) lbl.Text = t end }
 		end
 
-		-- Toggle ----------------------------------------------------------------------------
 		function target:AddToggle(o)
 			o = o or {}
 			local state = o.Default or false
@@ -1423,7 +1533,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Slider ----------------------------------------------------------------------------
 		function target:AddSlider(o)
 			o = o or {}
 			local min, max, inc = o.Min or 0, o.Max or 100, o.Increment or 1
@@ -1475,7 +1584,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Dropdown (single / Multi / Search) -------------------------------------------------
 		function target:AddDropdown(o)
 			o = o or {}
 			local options = o.Options or {}
@@ -1607,7 +1715,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Segmented ----------------------------------------------------------------------------
 		function target:AddSegmented(o)
 			o = o or {}
 			local options = o.Options or {}
@@ -1652,7 +1759,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Input ------------------------------------------------------------------------------
 		function target:AddInput(o)
 			o = o or {}
 			local text = o.Default or ""
@@ -1686,7 +1792,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- TextArea -----------------------------------------------------------------------------
 		function target:AddTextArea(o)
 			o = o or {}
 			local text = o.Default or ""
@@ -1718,7 +1823,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Keybind --------------------------------------------------------------------------------
 		function target:AddKeybind(o)
 			o = o or {}
 			local key = o.Default or Enum.KeyCode.Unknown
@@ -1761,7 +1865,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- ColorPicker -------------------------------------------------------------------------------
 		function target:AddColorPicker(o)
 			o = o or {}
 			local color = o.Default or Color3.new(1, 1, 1)
@@ -1850,7 +1953,6 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Custom GUI ---------------------------------------------------------------------------------
 		function target:AddCustom(height, builder)
 			local f = Base(height or 100)
 			f.ClipsDescendants = true
@@ -1858,7 +1960,6 @@ function Library:CreateWindow(cfg)
 			return f
 		end
 
-		-- bungkus semua elemen dengan fitur umum -------------------------------------------------------
 		for _, name in ipairs(ElementNames) do
 			local orig = target[name]
 			if orig then
@@ -1872,7 +1973,6 @@ function Library:CreateWindow(cfg)
 		end
 	end
 
-	-- Tab ---------------------------------------------------------------
 	function Window:CreateTab(name, icon)
 		local Tab = { Name = name, Active = false }
 		tabOrder += 1
@@ -1916,9 +2016,6 @@ function Library:CreateWindow(cfg)
 		return Tab
 	end
 
-	----------------------------------------------------------------
-	-- Notifications (6 posisi)
-	----------------------------------------------------------------
 	local nAnchorX, nBottom = 0, false
 	local function notifWidth() return math.min(310, localVP().X - 24) end
 	local notifLayout = Create("UIListLayout", { Padding = UDim.new(0, 0), SortOrder = Enum.SortOrder.LayoutOrder })
@@ -2020,9 +2117,6 @@ function Library:CreateWindow(cfg)
 		return { Dismiss = dismiss }
 	end
 
-	----------------------------------------------------------------
-	-- Resize handle
-	----------------------------------------------------------------
 	local handle = Create("TextButton", {
 		Name = "ResizeHandle", AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(26, 26),
 		BackgroundTransparency = 1, Text = "", ZIndex = 10, Parent = main,
@@ -2051,7 +2145,7 @@ function Library:CreateWindow(cfg)
 			local d = input.Position - rStart
 			local k = uiScale.Scale * math.max(mainScale.Scale, 0.01)
 			local vp = localVP()
-			-- batasi agar tepi kanan/bawah tidak melewati layar
+
 			local maxW = vp.X - main.Position.X.Offset
 			local maxH = vp.Y - main.Position.Y.Offset
 			local w, h = clampSize(rSize.X + d.X / k, rSize.Y + d.Y / k)
@@ -2059,9 +2153,6 @@ function Library:CreateWindow(cfg)
 		end
 	end))
 
-	----------------------------------------------------------------
-	-- Show / hide / minimize / restore / maximize
-	----------------------------------------------------------------
 	local animating = false
 	local function PopIn()
 		animating = true
@@ -2108,9 +2199,6 @@ function Library:CreateWindow(cfg)
 	end
 	maxBtn.MouseButton1Click:Connect(function() Window:ToggleMaximize() end)
 
-	----------------------------------------------------------------
-	-- Toggle button (kustom penuh)
-	----------------------------------------------------------------
 	local tbOpts = cfg.ToggleButton or {}
 	local toggleBtn = Create("Frame", {
 		Name = "ToggleButton", AnchorPoint = Vector2.new(0.5, 0.5), Position = tbOpts.Position or UDim2.new(0.5, 0, 0, 60),
@@ -2325,9 +2413,6 @@ function Library:CreateWindow(cfg)
 		if not gpe and input.KeyCode == toggleKey then Window:Toggle() end
 	end))
 
-	----------------------------------------------------------------
-	-- Dialog
-	----------------------------------------------------------------
 	local overlay = Create("TextButton", {
 		Name = "Overlay", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1,
 		Text = "", AutoButtonColor = false, Visible = false, Active = true, ZIndex = 30, Parent = main,
@@ -2413,7 +2498,7 @@ function Library:CreateWindow(cfg)
 	closeBtn.MouseButton1Click:Connect(function()
 		Window:Dialog({
 			Title = "Close UI?",
-			Content = "Apakah kamu yakin ingin menutup UI ini? Semua tab dan pengaturan akan hilang.",
+			Content = "Are you sure you want to close this UI? All tabs and settings will be lost.",
 			Icon = "triangle-alert", IconColor = theme.Danger,
 			Buttons = {
 				{ Text = "Close", Style = "danger", Callback = function()
@@ -2425,9 +2510,6 @@ function Library:CreateWindow(cfg)
 		})
 	end)
 
-	----------------------------------------------------------------
-	-- Settings API
-	----------------------------------------------------------------
 	function Window:SetTitle(t) titleLabel.Text = t end
 	function Window:SetToggleKey(k) toggleKey = k end
 	function Window:SetTheme(t)
@@ -2463,7 +2545,6 @@ function Library:CreateWindow(cfg)
 	function Window:SetAutoSave(on) Window.AutoSave = on and true or false end
 	function Window:SetNotifyPosition(pos) applyNotifyPos(pos) end
 
-	-- config ---------------------------------------------------------
 	local function Snapshot()
 		local data = {}
 		for k, v in pairs(saved) do data[k] = v end
@@ -2534,52 +2615,51 @@ function Library:CreateWindow(cfg)
 		return true
 	end
 
-	-- tab pengaturan bawaan -------------------------------------------
 	function Window:CreateSettingsTab(name, icon)
 		local tab = Window:CreateTab(name or "Settings", icon or "settings")
 
 		local ui = tab:AddGroup("Interface", { Icon = "monitor" })
-		ui:AddDropdown({ Name = "Theme", Flag = "ui_theme", Options = PresetOrder, Default = "Dark Gray", Keywords = "tema preset warna dark light", Callback = function(v)
+		ui:AddDropdown({ Name = "Theme", Flag = "ui_theme", Options = PresetOrder, Default = "Dark Gray", Keywords = "theme preset color dark light", Callback = function(v)
 			if v then Window:SetThemePreset(v) end
 		end })
-		ui:AddColorPicker({ Name = "Accent Color", Flag = "ui_accent", Default = theme.Accent, Keywords = "warna tema theme", Callback = function(c) Window:SetAccent(c) end })
-		ui:AddToggle({ Name = "Animated Background", Flag = "ui_bg", Default = cfg.Background ~= false, Keywords = "blackhole animasi background", Callback = function(v) Window:SetBackground(v) end })
-		ui:AddToggle({ Name = "Auto Scale (Responsive)", Flag = "ui_autoscale", Default = autoScale, Description = "Menyesuaikan ukuran UI dengan layar", Keywords = "ukuran layar dpi", Callback = function(v) Window:SetAutoScale(v) end })
-		ui:AddSlider({ Name = "UI Scale", Flag = "ui_scale", Min = 0.6, Max = 1.4, Default = userScale, Increment = 0.05, Keywords = "ukuran besar kecil", Callback = function(v) Window:SetScale(v) end })
+		ui:AddColorPicker({ Name = "Accent Color", Flag = "ui_accent", Default = theme.Accent, Keywords = "color theme", Callback = function(c) Window:SetAccent(c) end })
+		ui:AddToggle({ Name = "Animated Background", Flag = "ui_bg", Default = cfg.Background ~= false, Keywords = "blackhole animation background", Callback = function(v) Window:SetBackground(v) end })
+		ui:AddToggle({ Name = "Auto Scale (Responsive)", Flag = "ui_autoscale", Default = autoScale, Description = "Adjusts the UI size to fit the screen", Keywords = "screen size dpi", Callback = function(v) Window:SetAutoScale(v) end })
+		ui:AddSlider({ Name = "UI Scale", Flag = "ui_scale", Min = 0.6, Max = 1.4, Default = userScale, Increment = 0.05, Keywords = "size bigger smaller", Callback = function(v) Window:SetScale(v) end })
 		ui:AddDropdown({ Name = "Sidebar", Flag = "ui_sidebar", Options = { "Auto", "Expanded", "Collapsed" }, Default = "Auto", Callback = function(v) Window:SetSidebar(v) end })
-		ui:AddDropdown({ Name = "Notification Position", Flag = "ui_notifpos", Options = { "TopLeft", "TopCenter", "TopRight", "BottomLeft", "BottomCenter", "BottomRight" }, Default = cfg.NotifyPosition or "TopLeft", Keywords = "notifikasi posisi", Callback = function(v)
+		ui:AddDropdown({ Name = "Notification Position", Flag = "ui_notifpos", Options = { "TopLeft", "TopCenter", "TopRight", "BottomLeft", "BottomCenter", "BottomRight" }, Default = cfg.NotifyPosition or "TopLeft", Keywords = "notification position", Callback = function(v)
 			if v then Window:SetNotifyPosition(v) end
 		end })
-		ui:AddKeybind({ Name = "Toggle UI Key", Flag = "ui_togglekey", Default = toggleKey, Keywords = "hotkey tombol", Changed = function(k)
+		ui:AddKeybind({ Name = "Toggle UI Key", Flag = "ui_togglekey", Default = toggleKey, Keywords = "hotkey key button", Changed = function(k)
 			if k ~= Enum.KeyCode.Unknown then toggleKey = k end
 		end })
 		ui:AddButton({ Name = "Test Notification", Icon = "info", Callback = function()
-			Window:Notify({ Title = "Scripting404", Content = "Notifikasi berjalan dengan baik.", Type = "success", Duration = 3 })
+			Window:Notify({ Title = "Scripting404", Content = "Notifications are working correctly.", Type = "success", Duration = 3 })
 		end })
 
 		local cg = tab:AddGroup("Configuration", { Icon = "save" })
 		if not canFS then
-			cg:AddInfo({ Title = "File system tidak tersedia", Content = "Executor ini tidak mendukung writefile/readfile, jadi auto save dan config dinonaktifkan. Export/Import via clipboard tetap bisa dipakai.", Type = "warning" })
+			cg:AddInfo({ Title = "File system unavailable", Content = "This executor does not support writefile/readfile, so auto save and configs are disabled. Clipboard export/import still works.", Type = "warning" })
 		else
 			local nameInput = Window.ConfigName
 			local listDD
-			cg:AddToggle({ Name = "Auto Save", Flag = "ui_autosave", Default = Window.AutoSave, Keywords = "simpan otomatis", Callback = function(v) Window:SetAutoSave(v) end })
+			cg:AddToggle({ Name = "Auto Save", Flag = "ui_autosave", Default = Window.AutoSave, Keywords = "auto save", Callback = function(v) Window:SetAutoSave(v) end })
 			cg:AddInput({ Name = "Config Name", Default = Window.ConfigName, Callback = function(t) if t ~= "" then nameInput = t end end })
 			listDD = cg:AddDropdown({ Name = "Saved Configs", Options = Window:ListConfigs(), Default = Window.ConfigName, Callback = function(v) if v then nameInput = v end end })
 			local function refresh() listDD:Refresh(Window:ListConfigs()) end
 			cg:AddButton({ Name = "Save Config", Icon = "save", Callback = function()
 				local ok = Window:SaveConfig(nameInput)
 				refresh()
-				Window:Notify({ Title = "Config", Content = ok and ("Disimpan: " .. nameInput) or "Gagal menyimpan.", Type = ok and "success" or "error", Duration = 2.5 })
+				Window:Notify({ Title = "Config", Content = ok and ("Saved: " .. nameInput) or "Failed to save.", Type = ok and "success" or "error", Duration = 2.5 })
 			end })
 			cg:AddButton({ Name = "Load Config", Icon = "folder-open", Callback = function()
 				local ok = Window:LoadConfig(nameInput)
-				Window:Notify({ Title = "Config", Content = ok and ("Dimuat: " .. nameInput) or "Config tidak ditemukan.", Type = ok and "info" or "error", Duration = 2.5 })
+				Window:Notify({ Title = "Config", Content = ok and ("Loaded: " .. nameInput) or "Config not found.", Type = ok and "info" or "error", Duration = 2.5 })
 			end })
 			cg:AddButton({ Name = "Delete Config", Icon = "trash-2", Style = "danger", Callback = function()
 				Window:DeleteConfig(nameInput)
 				refresh()
-				Window:Notify({ Title = "Config", Content = "Dihapus: " .. nameInput, Type = "warning", Duration = 2.5 })
+				Window:Notify({ Title = "Config", Content = "Deleted: " .. nameInput, Type = "warning", Duration = 2.5 })
 			end })
 			cg:AddButton({ Name = "Refresh List", Icon = "refresh-cw", Callback = refresh })
 		end
@@ -2588,7 +2668,7 @@ function Library:CreateWindow(cfg)
 		cg:AddButton({ Name = "Copy Config to Clipboard", Icon = "copy", Callback = function()
 			local json = Window:ExportConfig()
 			local ok = json and pcall(function() (setclipboard or toclipboard or set_clipboard)(json) end)
-			Window:Notify({ Title = "Config", Content = ok and "Config disalin ke clipboard." or "Clipboard tidak didukung.", Type = ok and "success" or "error", Duration = 2.5 })
+			Window:Notify({ Title = "Config", Content = ok and "Config copied to clipboard." or "Clipboard is not supported.", Type = ok and "success" or "error", Duration = 2.5 })
 		end })
 		cg:AddInput({ Name = "Import (paste JSON)", Placeholder = "Paste config...", Callback = function(t) importText = t end })
 		cg:AddButton({ Name = "Import Config", Icon = "folder-open", Callback = function()
@@ -2598,17 +2678,14 @@ function Library:CreateWindow(cfg)
 				if ok and type(clip) == "string" then text = clip end
 			end
 			local ok = text and text ~= "" and Window:ImportConfig(text)
-			Window:Notify({ Title = "Config", Content = ok and "Config berhasil diimpor." or "JSON tidak valid.", Type = ok and "success" or "error", Duration = 2.5 })
+			Window:Notify({ Title = "Config", Content = ok and "Config imported successfully." or "Invalid JSON.", Type = ok and "success" or "error", Duration = 2.5 })
 		end })
 
 		local about = tab:AddGroup("About", { Icon = "info", Collapsed = true })
-		about:AddInfo({ Title = title, Content = "Scripting404 UI v" .. Library.Version .. ". Tekan " .. toggleKey.Name .. " untuk menampilkan/menyembunyikan UI.", Type = "info" })
+		about:AddInfo({ Title = title, Content = "Scripting404 UI v" .. Library.Version .. ". Press " .. toggleKey.Name .. " to show/hide the UI.", Type = "info" })
 		return tab
 	end
 
-	----------------------------------------------------------------
-	-- Init
-	----------------------------------------------------------------
 	BuildToggleButton(cfg.ToggleButton)
 	Layout(false)
 	UpdateHeader()
@@ -2622,7 +2699,6 @@ function Library:CreateWindow(cfg)
 		end
 	end))
 
-	-- ukuran layar berubah (rotasi HP, resize jendela game, dll): paksa tetap di dalam layar
 	track(gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		applyScale()
 		notifHolder.Size = UDim2.fromOffset(notifWidth(), 0)
