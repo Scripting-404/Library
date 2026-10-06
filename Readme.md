@@ -1,496 +1,73 @@
-# Scripting404 UI
+# Scripting404 UI Library
 
-A lightweight, responsive, executor-friendly UI library for Roblox. Gray/black default theme, built-in search, config save/load, notifications, dialogs, and an optional **Secured Mode** that protects your script from being dumped via hooks.
+A modern, responsive, single-file UI library for Roblox executors. It ships with an animated black-hole background, tab sidebar, collapsible groups, global feature search, notifications, dialogs, theme presets, a built-in config system, and an optional anti-tamper module.
+
+- **Version:** 4.0
+- **Platforms:** PC and mobile (auto-scales and switches to a compact layout on touch devices)
+- **Dependencies:** none required. Lucide icons are fetched at runtime and fall back to text glyphs if unavailable.
+
+---
 
 ## Table of Contents
 
-- [Features](#features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Step-by-Step Usage](#step-by-step-usage)
-- [Library:CreateWindow(config)](#librarycreatewindowconfig)
-- [Tabs and Containers](#tabs-and-containers)
-- [Elements](#elements)
-- [Reading Values with Flags](#reading-values-with-flags)
-- [Notifications and Dialogs](#notifications-and-dialogs)
-- [Floating Toggle Button](#floating-toggle-button)
-- [Themes](#themes)
-- [Config](#config)
-- [Window API](#window-api)
-- [Icons](#icons)
-- [Secured Mode (anti-hook)](#secured-mode-anti-hook)
-- [Full Example](#full-example)
-- [Notes](#notes)
+1. [Features](#features)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
+4. [Window](#window)
+   - [CreateWindow Options](#createwindow-options)
+   - [Toggle Button Options](#toggle-button-options)
+   - [Window Methods](#window-methods)
+   - [Window Properties](#window-properties)
+5. [Tabs, Sections and Groups](#tabs-sections-and-groups)
+6. [Elements](#elements)
+   - [Common Options and Methods](#common-options-and-methods)
+   - [Display Elements](#display-elements) (Section, Divider, Label, Paragraph, Tag, Info, Progress, Stat, Image, Code, Console)
+   - [Interactive Elements](#interactive-elements) (Button, Toggle, Slider, Dropdown, Segmented, Input, TextArea, Keybind, ColorPicker)
+   - [Custom Element](#custom-element)
+7. [Notifications](#notifications)
+8. [Dialogs](#dialogs)
+9. [Icons](#icons)
+10. [Themes](#themes)
+11. [Configuration System](#configuration-system)
+12. [Settings Tab](#settings-tab)
+13. [Search](#search)
+14. [Secure Mode (Anti-Tamper)](#secure-mode-anti-tamper)
+15. [Library API](#library-api)
+16. [Keyboard Shortcuts](#keyboard-shortcuts)
+17. [Full Example](#full-example)
+18. [Troubleshooting](#troubleshooting)
+
+---
 
 ## Features
 
-- Responsive window that stays inside the screen (drag, resize, maximize, mobile support, UI scale)
-- Theme presets: Dark Gray, Graphite, Black, Midnight, Light, plus custom colors and accent
-- Global feature search (`Ctrl+F` focuses the search box, `Enter` jumps to the first result)
-- Auto save/load config, clipboard export/import
-- Notifications (6 positions), dialogs, optional floating toggle button
-- Executor compatibility: `cloneref`, `gethui`, `protect_gui`, HttpGet fallbacks, text fallback if the icon library fails to load
-- Singleton: re-executing automatically closes the previous UI
-- Optional Secured Mode (anti-hook)
+- Animated black-hole background with falling glyph rain on notifications
+- Responsive layout: auto-scale, compact mode for touch devices, collapsible sidebar, resizable and maximizable window
+- 18 ready-made elements (toggles, sliders, dropdowns with search, color picker, console, and more)
+- Collapsible groups, section headers, dividers
+- Global search (`Ctrl + F`) that jumps to and highlights any feature
+- Notifications with six anchor positions, and modal dialogs
+- 5 theme presets plus fully custom themes, changeable at runtime
+- Automatic config save/load via flags, with import/export through the clipboard
+- Customizable floating toggle button with animations and a custom renderer
+- Optional anti-tamper (Secure Mode)
+- Singleton window: re-executing the script replaces the previous window
+
+---
 
 ## Installation
 
+Host `Scripting404UI.lua` somewhere reachable (for example this GitHub repository) and load it with `loadstring`:
+
 ```lua
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting-404/Library/refs/heads/main/Ui-library"))()
 ```
+
+Replace `<user>` and `<repo>` with your own values.
+
+---
 
 ## Quick Start
-
-```lua
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting-404/Library/refs/heads/main/Ui-library"))()
-
-local Window = Library:CreateWindow({ Version = "v1.0" })
-local Tab = Window:CreateTab("Main", "house")
-
-Tab:AddToggle({
-    Name = "Auto Farm",
-    Flag = "farm",
-    Description = "Farms automatically",
-    Callback = function(value) print(value) end,
-})
-
-Window:CreateSettingsTab()
-```
-
-## Step-by-Step Usage
-
-**1. Load the library**
-
-```lua
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting-404/Library/refs/heads/main/Ui-library"))()
-```
-
-**2. Create a window**
-
-```lua
-local Window = Library:CreateWindow({
-    Title = "My Script",
-    Version = "v1.0",
-    Theme = "Midnight",
-})
-```
-
-**3. Add tabs** (optionally with section titles in the sidebar)
-
-```lua
-Window:CreateTabSection("General")
-local Main = Window:CreateTab("Main", "house")
-local Visuals = Window:CreateTab("Visuals", "eye")
-```
-
-**4. Add groups and elements**
-
-```lua
-local Combat = Main:AddGroup("Combat", { Icon = "swords" })
-
-Combat:AddToggle({ Name = "Kill Aura", Flag = "killaura", Callback = function(on) end })
-Combat:AddSlider({ Name = "Range", Flag = "range", Min = 5, Max = 50, Default = 15, Callback = function(v) end })
-```
-
-**5. Add the built-in settings tab** (theme, scale, keybind, config manager)
-
-```lua
-Window:CreateSettingsTab()
-```
-
-**6. Use the values**
-
-```lua
-if Window.Flags.killaura then
-    print("Range:", Window.Flags.range)
-end
-```
-
-Press `RightShift` (default) to hide/show the UI.
-
-## Library:CreateWindow(config)
-
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `Title` | string | `"Scripting404"` | Window title |
-| `Version` | string | - | Version chip in the header |
-| `Icon` | string / number | `"terminal"` | Header icon |
-| `Theme` | string / table | `"Dark Gray"` | Preset name or a table of colors |
-| `Accent` | Color3 | preset | Accent color |
-| `Size` / `MinSize` / `MaxSize` | Vector2 | 620x420 / 380x260 / 1000x700 | Window size and resize limits |
-| `Scale` | number | 1 | Initial UI scale |
-| `AutoScale` | boolean | true | Scale to the screen automatically |
-| `ToggleKey` | Enum.KeyCode | `RightShift` | Show/hide key |
-| `ToggleButton` | table | - | Floating toggle button options |
-| `Background` | boolean | true | Animated background |
-| `BackgroundParticles` | number | 110 (60 on touch) | Number of background particles |
-| `NotifyPosition` | string | `"TopLeft"` | `TopLeft`, `TopCenter`, `TopRight`, `BottomLeft`, `BottomCenter`, `BottomRight` |
-| `MaxNotifications` | number | 5 | Max notifications on screen |
-| `ShowUser` | boolean | true | Show the player profile in the sidebar |
-| `AutoSave` | boolean | true | Auto save config on change |
-| `AutoLoad` | boolean | true | Load the last config on start |
-| `ConfigFolder` | string | `"Scripting404"` | Config folder |
-| `ConfigName` | string | last used or `"default"` | Config file name |
-| `SaveDelay` | number | 1.2 | Seconds to wait before auto save |
-| `Singleton` | boolean | true | Close the previous window when re-executed |
-| `OnClose` | function | - | Called when the UI is closed |
-
-## Tabs and Containers
-
-```lua
-Window:CreateTabSection("Section title")
-local Tab = Window:CreateTab("Name", "icon")
-Tab:Select()
-Window:SelectTab(Tab)
-```
-
-```lua
-local Group = Tab:AddGroup("Title", { Icon = "settings", Collapsed = false })
-Group:Expand(); Group:Collapse(); Group:Toggle(); Group:SetTitle("New title")
-
-Tab:AddSection("Section")          -- titled divider
-Tab:AddDivider("Optional text")    -- thin line
-```
-
-Every element below can be added to a `Tab` or a `Group`. Groups cannot be nested.
-
-## Elements
-
-### Button
-
-```lua
-local btn = Group:AddButton({
-    Name = "Teleport",
-    Description = "Teleport to spawn",  -- optional
-    Icon = "mouse-pointer-click",       -- optional
-    Style = "accent",                   -- "accent" | "danger" | nil
-    Callback = function() print("clicked") end,
-})
-btn:Fire()            -- run the callback from code
-btn:SetName("Done!")  -- change the label
-```
-
-### Toggle
-
-```lua
-local toggle = Group:AddToggle({
-    Name = "ESP", Description = "Show players", Flag = "esp", Default = false,
-    Callback = function(value) print(value) end,
-})
-toggle:Set(true)          -- fires Callback
-toggle:Set(true, true)    -- silent: does not fire Callback
-print(toggle:Get())
-```
-
-If `Default = true`, `Callback` runs once when the toggle is created.
-
-### Slider
-
-```lua
-local slider = Group:AddSlider({
-    Name = "WalkSpeed", Flag = "ws",
-    Min = 16, Max = 200, Default = 16, Increment = 1, Suffix = " studs/s",
-    Callback = function(value) end,
-})
-slider:Set(50); print(slider:Get())
-```
-
-### Dropdown
-
-```lua
-local dd = Group:AddDropdown({
-    Name = "Target Part", Flag = "part",
-    Options = { "Head", "Torso", "Random" },
-    Default = "Head",
-    Callback = function(value) end,
-})
-
--- Multi select: Default and the callback value are arrays
-Group:AddDropdown({
-    Name = "Mobs", Flag = "mobs", Multi = true,
-    Options = { "Bandit", "Boss", "Elite" }, Default = { "Bandit" },
-    Callback = function(list) print(table.concat(list, ", ")) end,
-})
-
-dd:Set("Torso"); print(dd:Get()); dd:Refresh({ "A", "B", "C" })
-```
-
-`Search` is enabled automatically when there are more than 8 options (set `Search = true/false` to force it).
-
-### Segmented
-
-```lua
-local seg = Group:AddSegmented({
-    Name = "Mode", Flag = "mode",
-    Options = { "Legit", "Rage" }, Default = "Legit",
-    Callback = function(value) end,
-})
-seg:Set("Rage"); print(seg:Get())
-```
-
-### Input and TextArea
-
-```lua
-local input = Group:AddInput({
-    Name = "Amount", Flag = "amount",
-    Default = "10", Placeholder = "Type here...",
-    Numeric = true,                               -- only accept numbers
-    Callback = function(text, enterPressed) end,
-})
-input:Set("25"); print(input:Get())
-
-local notes = Group:AddTextArea({
-    Name = "Notes", Flag = "notes", Height = 90, Placeholder = "Write something...",
-    Callback = function(text, enterPressed) end,
-})
-```
-
-### Keybind
-
-```lua
-local kb = Group:AddKeybind({
-    Name = "Fly Key", Flag = "flykey",
-    Default = Enum.KeyCode.F,
-    Callback = function(key) print("pressed", key.Name) end,  -- when the key is pressed
-    Changed = function(key) print("rebound to", key.Name) end, -- when the user picks a new key
-})
-kb:Set(Enum.KeyCode.G)   -- a string such as "G" also works
-```
-
-Press `Esc` while binding to clear the key.
-
-### Color Picker
-
-```lua
-local cp = Group:AddColorPicker({
-    Name = "ESP Color", Flag = "espcolor",
-    Default = Color3.fromRGB(255, 0, 0),
-    Callback = function(color) end,
-})
-cp:Set(Color3.fromRGB(0, 255, 0))   -- hex strings also work
-print(cp:Get())
-```
-
-### Display elements
-
-```lua
-local label = Group:AddLabel("Plain text")
-label:Set("Updated")                                              -- change the text
-local p = Group:AddParagraph("Title", "Longer description text.")   -- p:Set(title, body)
-
-local tags = Group:AddTag({ Name = "Status", Tags = { "Online", { "Premium", Color3.fromRGB(255, 200, 0) } } })
-tags:Add("New", Color3.fromRGB(0, 200, 120)); tags:Clear()
-
-Group:AddInfo({ Title = "Heads up", Content = "Something to know.", Type = "warning" })  -- info | success | warning | error
-
-local bar = Group:AddProgress({ Name = "Loading", Value = 0 })   -- 0-100
-bar:Set(70)
-
-local stat = Group:AddStat({ Name = "Kills", Value = 0, Icon = "swords" })
-stat:Set(12)
-
-Group:AddImage({ Image = "rbxassetid://123456", Height = 120 })
-
-Group:AddCode({ Title = "Discord", Code = "discord.gg/example" })   -- includes a copy button
-
-local console = Group:AddConsole({ Name = "Log", Height = 120, MaxLines = 200 })
-console:Log("Started")
-console:Log("Done", "success")   -- info | success | warning | error
-console:Clear()
-```
-
-### Custom
-
-```lua
-Group:AddCustom(100, function(frame, theme)
-    -- frame is a 100px-high Frame; theme holds the current colors
-end)
-```
-
-### Shared options and methods
-
-| Option | Description |
-| --- | --- |
-| `Flag` | Config key. The value is saved and available in `Window.Flags` |
-| `Keywords` | Extra search terms |
-| `Tooltip` | Text shown on hover |
-| `Locked` | `true` to start locked |
-| `Visible` | `false` to start hidden |
-
-Methods available on every element object: `:SetVisible(bool)`, `:SetLocked(bool)`, `:Destroy()`.
-
-## Reading Values with Flags
-
-Any element created with a `Flag` stores its value in `Window.Flags`, saves it to the config, and restores it on the next run.
-
-```lua
-print(Window.Flags.farm)          -- toggle state
-print(Window.Flags.ws)            -- slider value
-print(Window.Flags.flykey)        -- keybind name, e.g. "F"
-print(Window.Flags.espcolor)      -- color as hex string
-
-Window.Setters.farm(true)         -- set an element by its flag
-```
-
-## Notifications and Dialogs
-
-```lua
-Window:Notify({
-    Title = "Hello",
-    Content = "Script loaded.",
-    Type = "success",     -- info | success | warning | error
-    Duration = 3,         -- seconds (default 4)
-    Icon = "circle-check", -- optional
-})
-
-Window:Dialog({
-    Title = "Confirm",
-    Content = "Are you sure?",
-    Icon = "triangle-alert",
-    Buttons = {
-        { Text = "Cancel" },
-        { Text = "Delete", Style = "danger", Callback = function() print("deleted") end },
-    },
-})
-```
-
-`Notify` returns an object with `.Dismiss()`. A dialog without `Buttons` shows a single **OK** button.
-
-## Floating Toggle Button
-
-When the window is minimized, a floating button appears to bring it back. Configure it with `ToggleButton` in `CreateWindow` or later with `Window:SetToggleButton(opts)`.
-
-```lua
-Window:SetToggleButton({
-    Icon = "terminal",
-    Shape = "Circle",       -- "Rounded" | "Circle" | "Square"
-    Size = 46,
-    Animation = "pulse",    -- "pulse" | "float" | "spin" | "glow" | "breathe"
-    AlwaysVisible = false,  -- true: show even when the window is open
-})
-```
-
-Other options: `Image`, `IconSize`, `IconColor`, `Position` (UDim2), `Transparent`, `Background`, `BackgroundColor`, `BackgroundTransparency`, `Stroke`, `StrokeColor`, `Draggable`, `Custom`, `ClipCustom`.
-
-`Custom` lets you draw your own button content:
-
-```lua
-Window:SetToggleButton({
-    Shape = "Circle",
-    Custom = function(holder, api)
-        api.OnState(function(minimized) end)
-        api.OnHover(function(hovering) end)
-        api.OnClick(function() end)
-    end,
-})
-```
-
-## Themes
-
-Presets: `Dark Gray` (default), `Graphite`, `Black`, `Midnight`, `Light`.
-
-```lua
--- At creation
-Library:CreateWindow({ Theme = "Midnight" })
-Library:CreateWindow({ Theme = { Accent = Color3.fromRGB(120, 90, 255) } })  -- custom (missing keys use defaults)
-
--- At runtime
-Window:SetThemePreset("Light")
-Window:SetTheme({ Accent = Color3.fromRGB(255, 80, 80) })
-Window:SetAccent(Color3.fromRGB(0, 170, 255))
-```
-
-Theme keys: `Background`, `Panel`, `Element`, `ElementHover`, `Stroke`, `Text`, `SubText`, `Accent`, `Danger`.
-
-## Config
-
-```lua
-Window:SaveConfig("name")
-Window:LoadConfig("name")
-Window:DeleteConfig("name")
-print(table.concat(Window:ListConfigs(), ", "))
-
-local json = Window:ExportConfig()   -- JSON string
-Window:ImportConfig(json)
-Window:SetAutoSave(true)
-```
-
-Configs are stored as JSON in `ConfigFolder` (requires `writefile`/`readfile`). Without file support, clipboard export/import still works. The last used config name is remembered and loaded automatically.
-
-## Window API
-
-```lua
-Window:Toggle(); Window:Minimize(); Window:Restore(); Window:ToggleMaximize()
-Window:SetTitle("Title")
-Window:SetToggleKey(Enum.KeyCode.RightControl)
-Window:SetBackground(true)
-Window:SetScale(1)            -- 0.4 - 2
-Window:SetAutoScale(true)
-Window:SetSidebar("Auto")     -- "Auto" | "Expanded" | "Collapsed"
-Window:SetNotifyPosition("TopRight")
-Window:CreateSettingsTab()    -- built-in Settings tab
-Window:Destroy()
-Library:DestroyAll()
-```
-
-Properties: `Window.Flags`, `Window.Setters`, `Window.Tabs`, `Window.Gui`, `Window.Minimized`, `Window.Destroyed`, `Window.ConfigName`.
-
-`CreateSettingsTab(name?, icon?)` adds a ready-made tab with theme preset, accent color, animated background, auto scale, UI scale, sidebar mode, notification position, UI toggle key, and the full config manager (save, load, delete, clipboard export/import).
-
-## Icons
-
-An icon can be a Lucide icon name (`"house"`), an asset string (`"rbxassetid://123"`), or a number (`123`). If the icon library cannot be loaded, a text glyph is shown instead. You can override the icon source by setting `Library.IconsUrl` before the first `CreateWindow`.
-
-## Secured Mode (anti-hook)
-
-Secured Mode watches the functions that are commonly hooked to dump a script (`loadstring`, `request`, `setclipboard`, `writefile`, `hookfunction`, `game.HttpGet`, ...). If one of them changes after the library loaded, the UI is destroyed and the player is kicked and/or sent to another server. It is **off by default**.
-
-Set the options **before** loading the library:
-
-```lua
-getgenv().SECURED_MODE = true
-getgenv().SECURED_ACTION = "Kick"          -- "Kick" | "ServerHop" | "Both"
-getgenv().SECURED_MESSAGE = "Unauthorized hook detected."
-getgenv().SECURED_STRICT = false           -- true: also watch __namecall/__index/__newindex
-
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting-404/Library/refs/heads/main/Ui-library"))()
-```
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `SECURED_MODE` | `false` | Enables the protection |
-| `SECURED_ACTION` | `"Kick"` | `Kick`, `ServerHop`, or `Both` |
-| `SECURED_MESSAGE` | built-in text | Kick message |
-| `SECURED_STRICT` | `false` | Also watch metamethods. May cause false positives with other scripts (remote spies, Infinite Yield) |
-
-### Using your own hooks
-
-UI callbacks are trusted automatically. Hooks installed by your own script outside callbacks must be wrapped so they do not trigger the protection:
-
-```lua
-Library.Secure:Trust(function()
-    local old
-    old = hookmetamethod(game, "__namecall", function(self, ...)
-        return old(self, ...)
-    end)
-end)
-```
-
-Other API:
-
-```lua
-Library.Secure:IsEnabled()
-Library.Secure:Rebaseline()                -- accept the current state as safe
-Library.Secure.OnViolation = function(reason) end
-```
-
-### Limitations
-
-- This is client-side protection. It raises the effort needed to dump your script but cannot stop a determined attacker.
-- Detection is relative to the state at load time. A hook installed before the library loads cannot be detected this way.
-- Yielding (`task.wait`) inside a trusted callback before installing a hook also makes that hook trusted.
-
-## Full Example
 
 ```lua
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting-404/Library/refs/heads/main/Ui-library"))()
@@ -499,41 +76,722 @@ local Window = Library:CreateWindow({
     Title = "My Hub",
     Version = "v1.0",
     Theme = "Midnight",
-    ToggleButton = { Shape = "Circle", Animation = "pulse" },
 })
 
-Window:CreateTabSection("General")
-local Main = Window:CreateTab("Main", "house")
+local Main = Window:CreateTab("Main", "home")
 
-local Farm = Main:AddGroup("Farming", { Icon = "sprout" })
-Farm:AddToggle({ Name = "Auto Farm", Flag = "farm", Callback = function(on)
-    Window:Notify({ Title = "Auto Farm", Content = on and "Enabled" or "Disabled", Type = on and "success" or "info", Duration = 2 })
-end })
-Farm:AddSlider({ Name = "Delay", Flag = "delay", Min = 0.1, Max = 5, Default = 1, Increment = 0.1, Suffix = "s" })
-Farm:AddDropdown({ Name = "Target", Flag = "target", Options = { "Nearest", "Weakest", "Strongest" }, Default = "Nearest" })
-Farm:AddKeybind({ Name = "Panic Key", Flag = "panic", Default = Enum.KeyCode.X, Callback = function()
-    Window.Setters.farm(false)
-end })
-
-local Info = Main:AddGroup("Info", { Collapsed = true })
-Info:AddStat({ Name = "Runs", Value = 0, Icon = "activity" })
-Info:AddCode({ Title = "Discord", Code = "discord.gg/example" })
+Main:AddToggle({
+    Name = "Auto Farm",
+    Flag = "auto_farm",
+    Default = false,
+    Callback = function(state)
+        print("Auto Farm:", state)
+    end,
+})
 
 Window:CreateSettingsTab()
 
-task.spawn(function()
-    while task.wait(Window.Flags.delay or 1) do
-        if Window.Destroyed then break end
-        if Window.Flags.farm then
-            -- your farming logic here
-        end
-    end
+Window:Notify({ Title = "Loaded", Content = "Welcome!", Type = "success" })
+```
+
+---
+
+## Window
+
+### CreateWindow Options
+
+`Library:CreateWindow(cfg)` returns a `Window` object.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `Title` | string | `"Scripting404"` | Window title. Hidden automatically when the window is narrow. |
+| `Icon` | string / number | `"terminal"` | Title icon (Lucide name or asset id). |
+| `Version` | string | `nil` | Shows a small version chip in the header (visible when width >= 580). |
+| `Theme` | string / table | `"Dark Gray"` | A preset name or a table of theme color overrides. See [Themes](#themes). |
+| `Accent` | Color3 | preset accent | Overrides only the accent color. |
+| `Singleton` | boolean | `true` | When not `false`, destroys the previous window on re-execute. |
+| `Size` | Vector2 | `540x360` (`440x280` compact) | Initial size. |
+| `MinSize` | Vector2 | `360x240` (`320x210` compact) | Minimum size when resizing. |
+| `MaxSize` | Vector2 | `980x680` | Maximum size when resizing. |
+| `Scale` | number | `1` | User scale multiplier. |
+| `AutoScale` | boolean | `true` | Scales the UI to fit the screen. |
+| `ToggleKey` | Enum.KeyCode | `RightShift` | Key that shows/hides the window. |
+| `ConfigFolder` | string | `"Scripting404"` | Folder used for saved configs. |
+| `ConfigName` | string | last used or `"default"` | Config file to use. |
+| `AutoLoad` | boolean | `true` | Loads the config on startup (set `false` to disable). |
+| `AutoSave` | boolean | `true` | Saves flags automatically (set `false` to disable). |
+| `SaveDelay` | number | `1.2` | Debounce delay (seconds) for auto save. |
+| `Background` | boolean | `true` | Shows the animated black-hole background. |
+| `BackgroundParticles` | number | `110` (`60` on touch) | Number of background glyph particles. |
+| `ShowUser` | boolean | `true` | Shows the player profile card at the bottom of the sidebar. |
+| `NotifyPosition` | string | `"TopLeft"` | `TopLeft`, `TopCenter`, `TopRight`, `BottomLeft`, `BottomCenter`, `BottomRight`. |
+| `MaxNotifications` | number | `5` | Maximum notifications on screen at once. |
+| `ToggleButton` | table | see below | Floating restore button options. |
+| `OnClose` | function | `nil` | Called after the window is destroyed. |
+
+### Toggle Button Options
+
+The toggle button appears when the window is minimized (or always, with `AlwaysVisible`). Pass these in `cfg.ToggleButton`, or later with `Window:SetToggleButton(opts)`.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `Position` | UDim2 | top center | Initial position. |
+| `Size` | number | `46` | Button size in pixels. |
+| `Shape` | string | `"Rounded"` | `Rounded`, `Circle`, or `Square`. |
+| `Transparent` | boolean | `false` | Removes background and stroke. |
+| `Background` | boolean | `true` | Set `false` to hide the background. |
+| `BackgroundTransparency` | number | `0` | Background transparency. |
+| `BackgroundColor` | Color3 | theme `Panel` | Background color. |
+| `Stroke` | boolean | `true` | Show or hide the border. |
+| `StrokeColor` | Color3 | theme `Accent` | Border color. |
+| `Icon` / `Image` | string / number | window icon | Icon displayed on the button. |
+| `IconSize` | number | auto | Icon size in pixels. |
+| `IconColor` | Color3 | theme `Accent` | Icon tint. |
+| `Animation` | string | `nil` | `pulse`, `float`, `spin`, `glow`, or `breathe`. |
+| `AlwaysVisible` | boolean | `false` | Keeps the button visible; clicking toggles the window. |
+| `Draggable` | boolean | `true` | Set `false` to lock the position. |
+| `Custom` | function | `nil` | `function(holder, api)` for fully custom rendering. |
+| `ClipCustom` | boolean | `false` | Clips the custom holder to its bounds. |
+
+The `api` passed to `Custom` contains: `Theme`, `Tween`, `Window`, `Button`, `Face`, `Icon`, `Size`, `SetIcon`, `Create`, `OnState(fn)`, `OnHover(fn)`, `OnClick(fn)`, `Track(connection)`.
+
+```lua
+ToggleButton = {
+    Shape = "Circle",
+    Animation = "pulse",
+    Icon = "terminal",
+    AlwaysVisible = true,
+}
+```
+
+### Window Methods
+
+| Method | Description |
+|---|---|
+| `Window:CreateTab(name, icon)` | Creates a tab and returns a `Tab`. The first tab is selected automatically. |
+| `Window:CreateTabSection(text)` | Adds an uppercase label to the sidebar tab list. Call it before the tabs it should precede. |
+| `Window:SelectTab(tab)` | Selects a tab programmatically. |
+| `Window:CreateSettingsTab(name, icon)` | Builds a ready-made settings tab. See [Settings Tab](#settings-tab). |
+| `Window:Notify(options)` | Shows a notification. See [Notifications](#notifications). |
+| `Window:Dialog(options)` | Shows a modal dialog. See [Dialogs](#dialogs). |
+| `Window:Minimize()` | Minimizes the window. |
+| `Window:Restore()` | Restores the window. |
+| `Window:Toggle()` | Toggles between minimized and restored. |
+| `Window:ToggleMaximize()` | Maximizes or restores the original size. |
+| `Window:Destroy()` | Saves config (if auto save is on), disconnects everything, removes the GUI. |
+| `Window:SetTitle(text)` | Changes the title. |
+| `Window:SetToggleKey(keyCode)` | Changes the show/hide key. |
+| `Window:SetTheme(table)` | Applies theme color overrides live. |
+| `Window:SetThemePreset(name)` | Applies a preset. Returns `false` if the name is unknown. |
+| `Window:SetAccent(color3)` | Changes the accent color live. |
+| `Window:SetBackground(bool)` | Shows or hides the animated background. |
+| `Window:SetScale(multiplier)` | Sets the user scale (clamped to 0.4 - 2). |
+| `Window:SetAutoScale(bool)` | Enables or disables auto scale. |
+| `Window:SetSidebar(mode)` | `"Auto"`, `"Expanded"`, or `"Collapsed"`. |
+| `Window:SetAutoSave(bool)` | Enables or disables auto save. |
+| `Window:SetNotifyPosition(pos)` | Moves the notification stack. |
+| `Window:SetToggleButton(opts)` | Rebuilds the toggle button. |
+| `Window:SaveConfig(name)` | Saves flags to a file. Returns `true` on success. |
+| `Window:LoadConfig(name)` | Loads and applies a config. Returns `true` on success. |
+| `Window:DeleteConfig(name)` | Deletes a config file. |
+| `Window:ListConfigs()` | Returns a sorted array of config names. |
+| `Window:ExportConfig()` | Returns the current config as a JSON string. |
+| `Window:ImportConfig(json)` | Applies a JSON config string. Returns `true` on success. |
+
+### Window Properties
+
+| Property | Description |
+|---|---|
+| `Window.Flags` | Table of current flag values (`Window.Flags["auto_farm"]`). |
+| `Window.Setters` | Table of flag setter functions. |
+| `Window.Tabs` | Array of created tabs. |
+| `Window.Minimized` | `true` while minimized. |
+| `Window.Destroyed` | `true` after `Destroy()`. |
+| `Window.AutoSave` | Current auto save state. |
+| `Window.ConfigName` | Active config name. |
+| `Window.Compact` | `true` if the compact (mobile) layout is active. |
+| `Window.Gui` | The `ScreenGui`. |
+| `Window.Main` | The main window frame. |
+| `Window.Library` | Reference to the library table. |
+
+---
+
+## Tabs, Sections and Groups
+
+```lua
+Window:CreateTabSection("General")           -- sidebar label
+local Combat = Window:CreateTab("Combat", "swords")
+local Visuals = Window:CreateTab("Visuals", "eye")
+```
+
+A `Tab` supports every element method listed below, plus:
+
+| Method | Description |
+|---|---|
+| `Tab:Select()` | Selects this tab. |
+| `Tab:GetPage()` | Returns the underlying `ScrollingFrame`. |
+| `Tab:AddGroup(title, opts)` | Creates a collapsible group. |
+
+**Groups** hold elements inside a collapsible card. Groups cannot be nested.
+
+```lua
+local Group = Combat:AddGroup("Aimbot", { Icon = "crosshair", Collapsed = true })
+
+Group:AddToggle({ Name = "Enabled", Flag = "aim_enabled" })
+Group:AddSlider({ Name = "FOV", Min = 10, Max = 360, Default = 90, Flag = "aim_fov" })
+```
+
+| Group option | Type | Description |
+|---|---|---|
+| `Icon` | string / number | Icon next to the title. |
+| `Collapsed` | boolean | Start collapsed. |
+
+| Group method | Description |
+|---|---|
+| `Group:Expand()` | Expand the group. |
+| `Group:Collapse()` | Collapse the group. |
+| `Group:Toggle()` | Toggle expanded state. |
+| `Group:SetTitle(text)` | Change the title. |
+
+Groups support all element methods, so elements are added the same way as on a tab.
+
+---
+
+## Elements
+
+Every element method is available on both tabs and groups.
+
+### Common Options and Methods
+
+These options work on all elements from `AddLabel` through `AddColorPicker`:
+
+| Option | Type | Description |
+|---|---|---|
+| `Locked` | boolean | Starts locked (dimmed overlay blocks input). |
+| `Visible` | boolean | Set `false` to start hidden. |
+| `Tooltip` | string | Hover tooltip (PC only). |
+| `Keywords` | string | Extra words used by [search](#search). |
+| `Flag` | string | Saves and restores the value in configs (interactive elements only). |
+
+Returned objects additionally get:
+
+| Method | Description |
+|---|---|
+| `obj:SetVisible(bool)` | Show or hide the element. |
+| `obj:SetLocked(bool)` | Lock or unlock the element. |
+| `obj:Destroy()` | Remove the element and its search entries. |
+| `obj.Frame` | The element's root frame. |
+
+### Display Elements
+
+#### AddSection(text)
+A bold accent header with an underline. Returns the frame.
+
+```lua
+Tab:AddSection("Movement")
+```
+
+#### AddDivider(text?)
+A thin line, optionally with centered text. Returns the frame.
+
+```lua
+Tab:AddDivider("or")
+```
+
+#### AddLabel(text)
+A wrapped text line. Returns `{ Set(text) }`.
+
+```lua
+local lbl = Tab:AddLabel("Status: idle")
+lbl:Set("Status: running")
+```
+
+#### AddParagraph(title, body)
+A title with wrapped body text. Returns `{ Set(title, body) }`. Pass `nil` to keep a part unchanged.
+
+```lua
+local p = Tab:AddParagraph("About", "This script does something useful.")
+p:Set(nil, "Updated body text.")
+```
+
+#### AddTag({ Name, Tags })
+A row of chips. `Tags` can contain strings or `{ text, Color3 }` pairs.
+
+```lua
+local tags = Tab:AddTag({
+    Name = "Features",
+    Tags = { "Fast", { "Beta", Color3.fromRGB(225, 175, 80) } },
+})
+tags:Add("New", Color3.fromRGB(110, 190, 140))
+tags:Clear()
+```
+
+#### AddInfo({ Type, Title, Content, Icon })
+A colored callout box. `Type` is `"info"`, `"success"`, `"warning"`, or `"error"`. Returns `{ Set(title, content) }`.
+
+```lua
+Tab:AddInfo({ Type = "warning", Title = "Heads up", Content = "This feature is experimental." })
+```
+
+#### AddProgress({ Name, Value, Suffix })
+A progress bar (0 - 100). Returns `{ Set(v), Get() }`. `Suffix` defaults to `"%"`.
+
+```lua
+local bar = Tab:AddProgress({ Name = "Loading", Value = 25 })
+bar:Set(80)
+```
+
+#### AddStat({ Name, Value, Icon })
+A big-number stat card. Returns `{ Set(v), Get() }`.
+
+```lua
+local coins = Tab:AddStat({ Name = "Coins", Value = 0, Icon = "coins" })
+coins:Set(1500)
+```
+
+#### AddImage({ Image, Height, Name })
+Displays an image (asset id, `rbxassetid://` URL, or icon name). Returns `{ Set(image), Instance }`.
+
+```lua
+Tab:AddImage({ Image = 123456789, Height = 140 })
+```
+
+#### AddCode({ Title, Code })
+A monospace code block with a copy button (needs `setclipboard`). Returns `{ Set(code) }`.
+
+```lua
+Tab:AddCode({ Title = "Loader", Code = 'loadstring(game:HttpGet("..."))()' })
+```
+
+#### AddConsole({ Name, Height, MaxLines })
+A scrolling log with a Clear button. Returns `{ Log(text, kind), Clear() }`. `kind` is `"info"`, `"success"`, `"warning"`, or `"error"`. Defaults: `Height = 120`, `MaxLines = 200`.
+
+```lua
+local console = Tab:AddConsole({ Name = "Output", Height = 140 })
+console:Log("Started", "success")
+console:Log("Something failed", "error")
+```
+
+### Interactive Elements
+
+#### AddButton({ Name, Description, Style, Icon, Callback })
+- `Style`: `nil` (default), `"accent"`, or `"danger"`.
+- Returns `{ Fire(), SetName(text) }`.
+
+```lua
+Tab:AddButton({
+    Name = "Rejoin",
+    Description = "Rejoins the current server",
+    Style = "accent",
+    Icon = "refresh-cw",
+    Callback = function() print("clicked") end,
+})
+```
+
+#### AddToggle({ Name, Description, Default, Flag, Callback })
+- `Callback(state)` is called on change, and once at creation if `Default` is `true`.
+- Returns `{ Set(bool, silent?), Get() }`.
+
+```lua
+local t = Tab:AddToggle({
+    Name = "ESP",
+    Default = false,
+    Flag = "esp",
+    Callback = function(on) print(on) end,
+})
+t:Set(true, true) -- silent: no callback
+```
+
+#### AddSlider({ Name, Min, Max, Default, Increment, Suffix, Flag, Callback })
+- Defaults: `Min = 0`, `Max = 100`, `Increment = 1`.
+- `Callback(value)`. Returns `{ Set(v, silent?), Get() }`.
+
+```lua
+Tab:AddSlider({
+    Name = "WalkSpeed", Min = 16, Max = 200, Default = 16,
+    Increment = 1, Suffix = " studs/s", Flag = "walkspeed",
+    Callback = function(v) print(v) end,
+})
+```
+
+#### AddDropdown({ Name, Options, Default, Multi, Search, Flag, Callback })
+- Single select: `Default` is a value; `Callback(value)`.
+- Multi select (`Multi = true`): `Default` is an array; `Callback(arrayOfValues)`.
+- `Search`: shows a search box. When omitted, it appears automatically if there are more than 8 options.
+- Returns `{ Set(v, silent?), Get(), Refresh(newOptions) }`.
+
+```lua
+local dd = Tab:AddDropdown({
+    Name = "Target",
+    Options = { "Head", "Torso", "Legs" },
+    Default = "Head",
+    Flag = "target",
+    Callback = function(v) print(v) end,
+})
+dd:Refresh({ "Head", "Torso", "Arms", "Legs" })
+
+Tab:AddDropdown({
+    Name = "Modes", Multi = true,
+    Options = { "A", "B", "C" }, Default = { "A" },
+    Callback = function(list) print(table.concat(list, ", ")) end,
+})
+```
+
+#### AddSegmented({ Name, Options, Default, Flag, Callback })
+A segmented selector. `Name` is optional. Returns `{ Set(v, silent?), Get() }`.
+
+```lua
+Tab:AddSegmented({ Name = "Mode", Options = { "Easy", "Normal", "Hard" }, Default = "Normal" })
+```
+
+#### AddInput({ Name, Default, Placeholder, Numeric, Flag, Callback })
+- `Numeric = true` rejects non-numeric text.
+- `Callback(text, enterPressed)` fires when focus is lost.
+- Returns `{ Set(v), Get() }`.
+
+```lua
+Tab:AddInput({
+    Name = "Webhook", Placeholder = "https://...",
+    Callback = function(text, enter) print(text) end,
+})
+```
+
+#### AddTextArea({ Name, Default, Placeholder, Height, Flag, Callback })
+Multi-line input (default `Height = 90`). Same callback and return values as `AddInput`.
+
+#### AddKeybind({ Name, Default, Flag, Callback, Changed })
+- `Default`: an `Enum.KeyCode`.
+- `Callback(key)` fires when the bound key is pressed. `Changed(key)` fires when the user rebinds.
+- Press `Escape` while binding to clear it (`Enum.KeyCode.Unknown`).
+- Returns `{ Set(key, silent?), Get() }`. `Set` also accepts a key name string.
+
+```lua
+Tab:AddKeybind({
+    Name = "Fly Key", Default = Enum.KeyCode.F, Flag = "fly_key",
+    Callback = function() print("Fly pressed") end,
+})
+```
+
+#### AddColorPicker({ Name, Default, Flag, Callback })
+HSV picker with a hex input. `Callback(color3)`. Returns `{ Set(color3 | "#hex", silent?), Get() }`.
+
+```lua
+Tab:AddColorPicker({
+    Name = "ESP Color", Default = Color3.fromRGB(255, 0, 0), Flag = "esp_color",
+    Callback = function(c) print(c) end,
+})
+```
+
+### Custom Element
+
+`AddCustom(height, builder)` creates an empty card and calls `builder(frame, theme)` so you can build your own content. It returns the frame.
+
+```lua
+Tab:AddCustom(80, function(frame, theme)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.fromScale(1, 1)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = theme.Text
+    label.Text = "Hello from a custom element"
+    label.Parent = frame
 end)
 ```
 
-## Notes
+---
 
-- Callbacks run in their own thread (`task.spawn`), so an error in a callback does not break the UI.
-- With `Singleton = true` (default), creating a new window destroys the previous one. Set `Singleton = false` to keep several windows.
-- Closing the window with the **X** button asks for confirmation first.
-- The icon library is fetched over HTTP; without it only the icons are replaced by text glyphs.
+## Notifications
+
+```lua
+Window:Notify({
+    Title = "Success",
+    Content = "Config saved.",
+    Type = "success",
+    Duration = 4,
+})
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `Title` | string | `"Notification"` | Heading. |
+| `Content` | string | `""` | Body text (wraps). |
+| `Duration` | number | `4` | Seconds before auto-dismiss. |
+| `Type` | string | `nil` | `"info"`, `"success"`, `"warning"`, `"error"` (sets color and icon). |
+| `Color` | Color3 | by type / accent | Overrides the accent color. |
+| `Icon` / `Image` | string / number | by type | Custom icon. |
+| `IconColor` | Color3 | auto | Icon tint. |
+
+Returns `{ Dismiss = function }`. Clicking a notification dismisses it.
+
+---
+
+## Dialogs
+
+A modal confirmation box inside the window.
+
+```lua
+Window:Dialog({
+    Title = "Reset settings?",
+    Content = "This cannot be undone.",
+    Icon = "triangle-alert",
+    IconColor = Color3.fromRGB(225, 80, 80),
+    Buttons = {
+        { Text = "Reset", Style = "danger", Callback = function() print("reset") end },
+        { Text = "Cancel" },
+    },
+})
+```
+
+| Option | Description |
+|---|---|
+| `Title`, `Content` | Heading and body text. |
+| `Icon`, `IconColor` | Dialog icon and tint. |
+| `Buttons` | Array of `{ Text, Style = "danger"?, Callback? }`. Defaults to a single `OK` button. |
+
+---
+
+## Icons
+
+Anywhere an `Icon` is accepted you can pass:
+
+- A **Lucide icon name**, e.g. `"home"`, `"settings"`, `"swords"` (loaded at runtime from the Footagesus Icons module; requires HTTP access).
+- A **number** or numeric string: treated as `rbxassetid://<id>`.
+- A full `rbxassetid://`, `rbxasset://`, or `rbxthumb://` URL.
+
+If an icon cannot be loaded, a text glyph (the first letter or a built-in symbol) is shown instead, so the UI still works offline.
+
+---
+
+## Themes
+
+Presets: `Dark Gray`, `Graphite`, `Black`, `Midnight`, `Light`.
+
+```lua
+Library:CreateWindow({ Theme = "Midnight" })
+Window:SetThemePreset("Light")
+```
+
+A custom theme is a table of any of these keys (missing keys keep the default):
+
+| Key | Used for |
+|---|---|
+| `Background` | Window background |
+| `Panel` | Sidebar, cards, dropdown rows |
+| `Element` | Element backgrounds |
+| `ElementHover` | Hover state |
+| `Stroke` | Borders and tracks |
+| `Text` | Primary text |
+| `SubText` | Secondary text |
+| `Accent` | Highlights, active states |
+| `Danger` | Destructive actions |
+
+```lua
+Library:CreateWindow({
+    Theme = {
+        Accent = Color3.fromRGB(120, 180, 255),
+        Background = Color3.fromRGB(12, 12, 16),
+    },
+})
+
+Window:SetTheme({ Accent = Color3.fromRGB(255, 120, 120) })
+```
+
+---
+
+## Configuration System
+
+Configs are JSON files stored at `<ConfigFolder>/<name>.json`. The last used name is stored in `<ConfigFolder>/_last.txt` and loaded next time.
+
+- Any element with a `Flag` is saved and restored automatically.
+- Saves are debounced (default 1.2 s after the last change) when `AutoSave` is on, and also happen on `Window:Destroy()`.
+- Requires executor file APIs (`writefile`, `readfile`, `isfile`; `makefolder`, `isfolder`, `listfiles`, `delfile` for the extras). Without them, auto save and file configs are disabled; clipboard export/import still works.
+- Use unique flag names. Flags prefixed `ui_` are reserved for the settings tab.
+
+```lua
+Window:SaveConfig("legit")
+Window:LoadConfig("legit")
+print(table.concat(Window:ListConfigs(), ", "))
+
+local json = Window:ExportConfig()
+Window:ImportConfig(json)
+
+print(Window.Flags["auto_farm"]) -- read a flag value
+```
+
+---
+
+## Settings Tab
+
+`Window:CreateSettingsTab(name?, icon?)` builds a complete settings page. Call it **after** your own tabs so it appears last.
+
+It includes:
+
+- **Interface:** theme preset, accent color, animated background, auto scale, UI scale, sidebar mode, notification position, toggle key, test notification
+- **Configuration:** auto save, config name, saved configs list, save / load / delete / refresh, copy config to clipboard, import config
+- **About:** collapsed info card
+
+The settings tab uses these flags: `ui_theme`, `ui_accent`, `ui_bg`, `ui_autoscale`, `ui_scale`, `ui_sidebar`, `ui_notifpos`, `ui_togglekey`, `ui_autosave`.
+
+---
+
+## Search
+
+The search pill in the header indexes every tab, group, section, and element by name, plus `Keywords`, paragraph/info/code content, and the element type.
+
+- Press `Ctrl + F` to focus the search box.
+- Press `Enter` to jump to the top result.
+- Clicking a result opens the tab, expands the group, scrolls to the element, and flashes its border.
+
+Add `Keywords` to make features easier to find:
+
+```lua
+Tab:AddToggle({ Name = "ESP", Keywords = "wallhack visuals players box" })
+```
+
+---
+
+## Secure Mode (Anti-Tamper)
+
+An optional module that watches common executor functions for tampering (hooks, replaced functions, and similar) and reacts when it detects it. It is **off by default**.
+
+### Enabling
+
+Set the globals **before** loading the library:
+
+```lua
+getgenv().SECURED_MODE = true
+getgenv().SECURED_ACTION = "kick"      -- "kick" (default), "warn", or "serverhop"
+getgenv().SECURED_MESSAGE = "Security: script tampering detected."
+getgenv().SECURED_STRICT = false       -- true also flags non-native HttpGet
+getgenv().SECURED_META = true          -- false disables the metamethod leak check
+getgenv().SECURED_INTERVAL = 1         -- seconds between checks
+
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting-404/Library/refs/heads/main/Ui-library"))()
+```
+
+(`SECURED_MODR` is accepted as an alias of `SECURED_MODE`.)
+
+### Monitored functions by default
+
+`game.HttpGet`, `game.HttpGetAsync`, `loadstring`, `request`, `http_request`, `syn.request`, `http.request`, `fluxus.request`, `setclipboard`, `toclipboard`, `set_clipboard`, `writefile`, `appendfile`, `hookfunction`, `replaceclosure`.
+
+### API (`Library.Secure`)
+
+| Function | Description |
+|---|---|
+| `Secure.Start()` / `Secure.Stop()` | Start or stop monitoring. |
+| `Secure.Check()` | Run a check immediately. |
+| `Secure.Trigger(reason)` | Manually trigger the detection response. |
+| `Secure.OnDetect(callback)` | Register `callback(reason)`. Return `false` to cancel the default action. |
+| `Secure.Watch(name)` | Add a function path (e.g. `"mycustom.func"`) to the watch list. |
+| `Secure.Exclude(name)` | Remove a path from the watch list. |
+| `Secure.Pause()` / `Secure.Resume()` | Temporarily suspend checks (nestable). Resume re-baselines. |
+| `Secure.Trust(fn, ...)` | Runs `fn` with checks paused. Also `Library:Trust(fn, ...)`. |
+| `Secure.Rebaseline()` | Re-record the current function states as the baseline. |
+
+Use `Trust` around code that legitimately modifies monitored functions, so it does not trigger a false positive:
+
+```lua
+Library:Trust(function()
+    loadstring(game:HttpGet("https://example.com/other-script.lua"))()
+end)
+```
+
+Note: this is a best-effort deterrent, not a guarantee. Determined users can bypass client-side checks.
+
+---
+
+## Library API
+
+| Member | Description |
+|---|---|
+| `Library:CreateWindow(cfg)` | Creates a window. |
+| `Library:DestroyAll()` | Destroys every window created by the library. |
+| `Library:Trust(fn, ...)` | Runs a function with Secure Mode paused. |
+| `Library.Windows` | Array of created windows. |
+| `Library.Presets` | Table of theme presets. |
+| `Library.Secure` | Secure Mode API. |
+| `Library.Version` | Library version string. |
+| `Library.DefaultTitle` | Default window title. |
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `RightShift` (configurable) | Show / hide the window |
+| `Ctrl + F` | Focus search |
+| `Enter` (in search) | Jump to the first result |
+| `Escape` (while binding a key) | Clear the keybind |
+
+---
+
+## Full Example
+
+```lua
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting-404/Library/refs/heads/main/Ui-library"))()
+
+local Window = Library:CreateWindow({
+    Title = "Example Hub",
+    Version = "v1.0.0",
+    Theme = "Graphite",
+    ToggleKey = Enum.KeyCode.RightShift,
+    NotifyPosition = "BottomRight",
+    ToggleButton = { Shape = "Circle", Animation = "pulse", AlwaysVisible = false },
+})
+
+Window:CreateTabSection("Features")
+
+local Main = Window:CreateTab("Main", "home")
+Main:AddSection("Player")
+
+Main:AddSlider({
+    Name = "WalkSpeed", Min = 16, Max = 200, Default = 16, Flag = "ws",
+    Callback = function(v)
+        local hum = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = v end
+    end,
+})
+
+local Combat = Window:CreateTab("Combat", "swords")
+local Aim = Combat:AddGroup("Aimbot", { Icon = "crosshair" })
+Aim:AddToggle({ Name = "Enabled", Flag = "aim_on", Keywords = "assist lock" })
+Aim:AddDropdown({ Name = "Part", Options = { "Head", "Torso" }, Default = "Head", Flag = "aim_part" })
+Aim:AddKeybind({ Name = "Hold Key", Default = Enum.KeyCode.E, Flag = "aim_key" })
+
+local Logs = Window:CreateTab("Logs", "terminal")
+local console = Logs:AddConsole({ Name = "Output", Height = 160 })
+console:Log("Hub loaded", "success")
+
+Main:AddButton({
+    Name = "Say hello",
+    Style = "accent",
+    Callback = function()
+        Window:Notify({ Title = "Hello", Content = "Button clicked!", Type = "info" })
+        console:Log("Button clicked")
+    end,
+})
+
+Window:CreateSettingsTab()
+```
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| Icons show as letters/symbols | The icon module could not be downloaded. Check HTTP access, or use asset ids. |
+| Configs are not saved | The executor lacks `writefile`/`readfile`/`isfile`. Use `ExportConfig` / `ImportConfig` with the clipboard. |
+| Copy button says clipboard is unsupported | The executor lacks `setclipboard`. |
+| UI is too big or small on my screen | Use the **UI Scale** slider in the settings tab or set `Scale` / `AutoScale` in `CreateWindow`. |
+| Settings do not restore | Make sure every element has a unique `Flag` and that flag names do not start with `ui_`. |
+| Window disappears after minimizing | Click the floating toggle button or press the toggle key (`RightShift` by default). |
+| Two windows after re-executing | Set `Singleton = true` (default) or call `Library:DestroyAll()` first. |
+| Secure Mode kicks me unexpectedly | Wrap legitimate hook or loader code in `Library:Trust(...)`, or set `SECURED_ACTION = "warn"` while debugging. |
+
+---
+
+## License
+
+Add your license here (for example MIT).
