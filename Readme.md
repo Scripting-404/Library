@@ -422,40 +422,6 @@ end
 
 ---
 
-## Execution Tracker
-
-Sends an anonymous execution event (random event key + executor name) to your own endpoint once per execution, when the first window is created.
-
-```lua
-Library.Execution.ApiKey = "YOUR_API_KEY"
--- Library.Execution.ApiUrl  = "https://your-endpoint/api/execution"
--- Library.Execution.Enabled = false
-```
-
-Or per window:
-
-```lua
-Library:CreateWindow({
-	Title = "Scripting404",
-	Execution = { ApiKey = "YOUR_API_KEY" },
-})
-```
-
-Request format:
-
-```
-POST <ApiUrl>
-Content-Type: application/json
-x-api-key: <ApiKey>
-
-{ "eventKey": "<random GUID>", "executorName": "<detected executor>" }
-```
-
-Nothing is sent while `ApiKey` is empty or still the placeholder `"Api key"`.
-`Library:GetExecutor()` returns the detected executor name.
-
----
-
 ## Secure Mode
 
 Optional tamper detection that watches common executor functions (`loadstring`, `request`, `writefile`, `hookfunction`, ...) and the game metatable. Enable it with a global **before** loading the library:
