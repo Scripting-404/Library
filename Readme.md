@@ -15,7 +15,6 @@ A modern dark-gray UI library for Roblox executors (Luau), with an animated blac
 - [Themes](#themes)
 - [Toggle Button](#toggle-button)
 - [Key System](#key-system)
-- [Execution Tracker](#execution-tracker)
 - [Secure Mode](#secure-mode)
 - [Window API](#window-api)
 - [Library API](#library-api)
