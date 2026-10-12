@@ -84,6 +84,8 @@ local DEFAULTS = {
 	Discord = nil,
 	Website = nil,
 	Info = false,
+	Changelog = nil,
+	Profile = nil,
 	Cards = nil,
 	KeySystem = nil,
 	Callback = nil,
@@ -1620,46 +1622,190 @@ function KeySystem.new(userOptions)
 	}, Gui)
 	local ContentScale = new("UIScale", { Scale = 1 }, Content)
 
-	local TagHolder = new("Frame", {
-		Name = "Tag",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.fromScale(0.5, 0.97),
-		Size = UDim2.fromOffset(0, 18),
-		AutomaticSize = Enum.AutomaticSize.X,
-		BackgroundTransparency = 1,
-		ZIndex = 6,
-	}, Gui)
-	new("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		Padding = UDim.new(0, 8),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, TagHolder)
-	local tagScale = new("UIScale", { Scale = 1 }, TagHolder)
-	local TagIcon = new("ImageLabel", {
-		Size = UDim2.fromOffset(16, 16),
-		BackgroundTransparency = 1,
-		ImageColor3 = SECONDARY,
-		ImageTransparency = 1,
-		LayoutOrder = 1,
-		ZIndex = 6,
-	}, TagHolder)
-	iconSet(TagIcon, "terminal")
-	local TagLabel = new("TextLabel", {
-		Size = UDim2.fromOffset(0, 16),
-		AutomaticSize = Enum.AutomaticSize.X,
-		BackgroundTransparency = 1,
-		Text = cfg.Title .. "  //  " .. cfg.Subtitle,
-		Font = Enum.Font.Code,
-		TextSize = 13,
-		TextColor3 = SECONDARY,
-		TextTransparency = 1,
-		LayoutOrder = 2,
-		ZIndex = 6,
-	}, TagHolder)
-	tween(TagIcon, 0.8, { ImageTransparency = 0.2 }, Enum.EasingStyle.Sine)
-	tween(TagLabel, 0.8, { TextTransparency = 0.2 }, Enum.EasingStyle.Sine)
+	local tagScale
+	do
+		local HUB_SHAPES = {
+			circle = "circle", lingkaran = "circle",
+			square = "square", persegi = "square", kotak = "square",
+			rounded = "rounded", round = "rounded",
+			custom = "custom",
+			none = "none", photo = "none", foto = "none",
+		}
+		local profCfg = type(cfg.Profile) == "table" and cfg.Profile or {}
+		local hubShape = HUB_SHAPES[tostring(profCfg.Shape or "rounded"):lower()] or "rounded"
+		local hubSize = math.clamp(tonumber(profCfg.Size) or 40, 16, 120)
+		local hubW, hubH = hubSize, hubSize
+		if hubShape == "custom" or hubShape == "none" then
+			hubW = math.clamp(tonumber(profCfg.Width) or hubSize, 16, 240)
+			hubH = math.clamp(tonumber(profCfg.Height) or hubSize, 16, 120)
+		end
+		local hubRadius = nil
+		if hubShape == "circle" then
+			hubRadius = UDim.new(1, 0)
+		elseif hubShape == "rounded" then
+			hubRadius = UDim.new(0, math.floor(hubSize * 0.28))
+		elseif hubShape == "custom" then
+			local r = profCfg.Radius
+			hubRadius = typeof(r) == "UDim" and r or UDim.new(0, tonumber(r) or 14)
+		end
+
+		local TagHolder = new("Frame", {
+			Name = "ScriptProfile",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromScale(0.5, 0.97),
+			Size = UDim2.fromOffset(0, 0),
+			AutomaticSize = Enum.AutomaticSize.XY,
+			BackgroundColor3 = INPUT_BG,
+			BackgroundTransparency = 0.25,
+			BorderSizePixel = 0,
+			ZIndex = 6,
+		}, Gui)
+		new("UICorner", { CornerRadius = UDim.new(0, 14) }, TagHolder)
+		new("UIPadding", {
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 8),
+			PaddingLeft = UDim.new(0, 10),
+			PaddingRight = UDim.new(0, 16),
+		}, TagHolder)
+		new("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Left,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = UDim.new(0, 10),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, TagHolder)
+		tagScale = new("UIScale", { Scale = 1 }, TagHolder)
+		local hubStroke = new("UIStroke", {
+			Color = Color3.fromRGB(255, 255, 255),
+			Thickness = 1.2,
+			Transparency = 0.5,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}, TagHolder)
+		local hubGradient = new("UIGradient", {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, ACCENT),
+				ColorSequenceKeypoint.new(0.5, SECONDARY),
+				ColorSequenceKeypoint.new(1, ACCENT),
+			}),
+		}, hubStroke)
+		loopTween(hubGradient, 6, { Rotation = 360 }, Enum.EasingStyle.Linear)
+
+		local HubImage = new("Frame", {
+			Name = "Photo",
+			Size = UDim2.fromOffset(hubW, hubH),
+			BackgroundColor3 = BTN_BG,
+			BackgroundTransparency = hubShape == "none" and 1 or 0,
+			BorderSizePixel = 0,
+			LayoutOrder = 1,
+			ZIndex = 7,
+		}, TagHolder)
+		local HubPhoto = new("ImageLabel", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			ScaleType = hubShape == "none" and Enum.ScaleType.Fit or Enum.ScaleType.Crop,
+			ZIndex = 8,
+		}, HubImage)
+		local HubFallback = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(math.min(hubW, hubH) * 0.5, math.min(hubW, hubH) * 0.5),
+			BackgroundTransparency = 1,
+			ImageColor3 = SECONDARY,
+			ZIndex = 8,
+		}, HubImage)
+		iconSet(HubFallback, "terminal")
+		if hubRadius then
+			new("UICorner", { CornerRadius = hubRadius }, HubImage)
+			new("UICorner", { CornerRadius = hubRadius }, HubPhoto)
+			new("UIStroke", {
+				Color = ACCENT,
+				Thickness = 1.5,
+				Transparency = 0.55,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			}, HubImage)
+		end
+
+		local imgSrc = profCfg.Image
+		if imgSrc ~= nil and trim(imgSrc) ~= "" then
+			local s = trim(imgSrc)
+			if s:match("^%d+$") then
+				HubPhoto.Image = "rbxassetid://" .. s
+				HubFallback.Visible = false
+			elseif s:match("^https?://") then
+				task.spawn(function()
+					local gca = getcustomasset or getsynasset
+					if not (gca and writefile) then
+						return
+					end
+					local body = httpGet(s)
+					if not body then
+						return
+					end
+					local path = cfg.Folder .. "/" .. tagName .. "_profile.png"
+					writeFileSafe(cfg.Folder, path, body)
+					local ok, asset = pcall(gca, path)
+					if ok and asset and HubPhoto.Parent then
+						HubPhoto.Image = asset
+						HubFallback.Visible = false
+					end
+				end)
+			else
+				HubPhoto.Image = s
+				HubFallback.Visible = false
+			end
+		end
+
+		local HubText = new("Frame", {
+			Size = UDim2.fromOffset(0, 0),
+			AutomaticSize = Enum.AutomaticSize.XY,
+			BackgroundTransparency = 1,
+			LayoutOrder = 2,
+			ZIndex = 7,
+		}, TagHolder)
+		new("UIListLayout", {
+			FillDirection = Enum.FillDirection.Vertical,
+			HorizontalAlignment = Enum.HorizontalAlignment.Left,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = UDim.new(0, 2),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, HubText)
+		local hubName = tostring(profCfg.Name or cfg.Title)
+		local hubDesc = tostring(profCfg.Description or cfg.Subtitle or "")
+		local HubName = new("TextLabel", {
+			Size = UDim2.fromOffset(0, 18),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundTransparency = 1,
+			Text = hubName,
+			Font = Enum.Font.GothamBold,
+			TextSize = 15,
+			TextColor3 = ACCENT,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			LayoutOrder = 1,
+			ZIndex = 8,
+		}, HubText)
+		new("UISizeConstraint", { MaxSize = Vector2.new(300, math.huge) }, HubName)
+		if hubDesc ~= "" then
+			local HubDesc = new("TextLabel", {
+				Size = UDim2.fromOffset(0, 14),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundTransparency = 1,
+				Text = hubDesc,
+				Font = Enum.Font.Gotham,
+				TextSize = 11,
+				TextColor3 = SECONDARY,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				LayoutOrder = 2,
+				ZIndex = 8,
+			}, HubText)
+			new("UISizeConstraint", { MaxSize = Vector2.new(300, math.huge) }, HubDesc)
+		end
+
+		local hubItems = snapshot(TagHolder)
+		apply(hubItems, 0)
+		apply(hubItems, 1, 0.8)
+	end
 
 	local lastVpX, lastVpY = 0, 0
 	local function applyLayout()
@@ -1673,10 +1819,10 @@ function KeySystem.new(userOptions)
 		lastVpX, lastVpY = vp.X, vp.Y
 		minDim = math.min(vp.X, vp.Y)
 		if not exiting then
-			BASE_SCALE = math.clamp(math.min(vp.X * 0.94 / DESIGN_W, vp.Y * 0.86 / DESIGN_H), 0.2, 3)
+			BASE_SCALE = math.clamp(math.min(vp.X * 0.94 / DESIGN_W, vp.Y * 0.76 / DESIGN_H), 0.2, 3)
 			ContentScale.Scale = BASE_SCALE
 		end
-		tagScale.Scale = math.clamp(minDim / 450, 0.75, 2.6)
+		tagScale.Scale = math.clamp(minDim / 700, 0.6, 1.4)
 		edge.layout(vp.X, vp.Y)
 		return true
 	end
@@ -2078,6 +2224,512 @@ function KeySystem.new(userOptions)
 		end
 	end
 
+	local openInfo, openChangelog
+	local finished = false
+	local destroyed = false
+	do
+		local TAB_X, TAB_Y = 20, 40
+		local WHITE = Color3.fromRGB(255, 255, 255)
+		local tabStack, tabOpen, tabToken, bodyOrder = {}, false, 0, 0
+
+		local TabPanel = new("CanvasGroup", {
+			Name = "LeftTab",
+			Position = UDim2.fromOffset(TAB_X - 12, TAB_Y),
+			Size = UDim2.fromOffset(336, 320),
+			BackgroundColor3 = Color3.fromRGB(16, 17, 23),
+			BackgroundTransparency = 0.04,
+			BorderSizePixel = 0,
+			GroupTransparency = 1,
+			Visible = false,
+			Active = true,
+			ZIndex = 20,
+		}, Content)
+		rounded(TabPanel, 12, SECONDARY, 0.45)
+
+		local backBtn = new("TextButton", {
+			Name = "Back",
+			Position = UDim2.fromOffset(12, 12),
+			Size = UDim2.fromOffset(84, 30),
+			BackgroundColor3 = BTN_BG,
+			BackgroundTransparency = 0.1,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			Text = "",
+			ZIndex = 22,
+		}, TabPanel)
+		rounded(backBtn, 8, SECONDARY, 0.5)
+		local backIcon = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromOffset(10, 15),
+			Size = UDim2.fromOffset(16, 16),
+			BackgroundTransparency = 1,
+			ImageColor3 = ACCENT,
+			ZIndex = 23,
+		}, backBtn)
+		iconSet(backIcon, "arrow-left")
+		new("TextLabel", {
+			Position = UDim2.fromOffset(32, 0),
+			Size = UDim2.new(1, -38, 1, 0),
+			BackgroundTransparency = 1,
+			Text = "Back",
+			Font = Enum.Font.GothamBold,
+			TextSize = 13,
+			TextColor3 = ACCENT,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 23,
+		}, backBtn)
+		backBtn.MouseEnter:Connect(function()
+			tween(backBtn, 0.15, { BackgroundColor3 = BTN_HOVER }, Enum.EasingStyle.Sine)
+			tween(backIcon, 0.2, { Position = UDim2.fromOffset(6, 15) }, Enum.EasingStyle.Back)
+		end)
+		backBtn.MouseLeave:Connect(function()
+			tween(backBtn, 0.15, { BackgroundColor3 = BTN_BG }, Enum.EasingStyle.Sine)
+			tween(backIcon, 0.2, { Position = UDim2.fromOffset(10, 15) }, Enum.EasingStyle.Back)
+		end)
+
+		local tabTitle = new("TextLabel", {
+			Position = UDim2.fromOffset(108, 12),
+			Size = UDim2.new(1, -120, 0, 30),
+			BackgroundTransparency = 1,
+			Text = "",
+			Font = Enum.Font.GothamBold,
+			TextSize = 15,
+			TextColor3 = ACCENT,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ZIndex = 22,
+		}, TabPanel)
+		new("Frame", {
+			Position = UDim2.fromOffset(12, 50),
+			Size = UDim2.new(1, -24, 0, 1),
+			BackgroundColor3 = SECONDARY,
+			BackgroundTransparency = 0.7,
+			BorderSizePixel = 0,
+			ZIndex = 22,
+		}, TabPanel)
+		local TabBody = new("ScrollingFrame", {
+			Position = UDim2.fromOffset(12, 58),
+			Size = UDim2.new(1, -24, 1, -70),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ScrollBarThickness = 3,
+			ScrollBarImageColor3 = SECONDARY,
+			CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			ZIndex = 22,
+		}, TabPanel)
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, TabBody)
+		new("UIPadding", { PaddingRight = UDim.new(0, 8) }, TabBody)
+
+		local function nextOrder()
+			bodyOrder += 1
+			return bodyOrder
+		end
+		local function bodyClear()
+			for _, c in ipairs(TabBody:GetChildren()) do
+				if c:IsA("GuiObject") then
+					c:Destroy()
+				end
+			end
+			TabBody.CanvasPosition = Vector2.new(0, 0)
+			bodyOrder = 0
+		end
+		local function clean(s)
+			s = tostring(s or ""):gsub("\r", "")
+			s = s:gsub("^%s+", "")
+			s = s:gsub("%s+$", "")
+			return s
+		end
+		local function pick(t, ...)
+			for _, k in ipairs({ ... }) do
+				if t[k] ~= nil then
+					return t[k]
+				end
+			end
+			return nil
+		end
+		local function toLines(v)
+			if type(v) == "table" then
+				local out = {}
+				for _, line in ipairs(v) do
+					out[#out + 1] = "• " .. tostring(line)
+				end
+				return table.concat(out, "\n")
+			end
+			return clean(v)
+		end
+		local function vlabel(v)
+			v = tostring(v)
+			if v:match("^[vV]%d") then
+				return v
+			end
+			if v:match("^%d") then
+				return "v" .. v
+			end
+			return v
+		end
+
+		local function bodyText(text, size, color, font)
+			return new("TextLabel", {
+				Size = UDim2.new(1, 0, 0, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				BackgroundTransparency = 1,
+				Text = text,
+				TextWrapped = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Top,
+				Font = font or Enum.Font.Gotham,
+				TextSize = size or 13,
+				TextColor3 = color or ACCENT,
+				LayoutOrder = nextOrder(),
+				ZIndex = 23,
+			}, TabBody)
+		end
+		local function bodyDivider()
+			new("Frame", {
+				Size = UDim2.new(1, 0, 0, 1),
+				BackgroundColor3 = SECONDARY,
+				BackgroundTransparency = 0.75,
+				BorderSizePixel = 0,
+				LayoutOrder = nextOrder(),
+				ZIndex = 23,
+			}, TabBody)
+		end
+		local function bodyRow(name, value)
+			local row = new("Frame", {
+				Size = UDim2.new(1, 0, 0, 30),
+				BackgroundColor3 = WHITE,
+				BackgroundTransparency = 0.94,
+				BorderSizePixel = 0,
+				LayoutOrder = nextOrder(),
+				ZIndex = 23,
+			}, TabBody)
+			new("UICorner", { CornerRadius = UDim.new(0, 8) }, row)
+			new("TextLabel", {
+				Position = UDim2.fromOffset(10, 0),
+				Size = UDim2.new(0.5, -10, 1, 0),
+				BackgroundTransparency = 1,
+				Text = name,
+				Font = Enum.Font.Gotham,
+				TextSize = 12,
+				TextColor3 = SECONDARY,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = 24,
+			}, row)
+			new("TextLabel", {
+				Position = UDim2.fromScale(0.5, 0),
+				Size = UDim2.new(0.5, -10, 1, 0),
+				BackgroundTransparency = 1,
+				Text = value,
+				Font = Enum.Font.Code,
+				TextSize = 12,
+				TextColor3 = ACCENT,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				ZIndex = 24,
+			}, row)
+		end
+		local function bodyHeader(version, date, title)
+			local head = new("Frame", {
+				Size = UDim2.new(1, 0, 0, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				BackgroundTransparency = 1,
+				LayoutOrder = nextOrder(),
+				ZIndex = 23,
+			}, TabBody)
+			new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, head)
+			local function line(text, size, color, font, order)
+				new("TextLabel", {
+					Size = UDim2.new(1, 0, 0, size + 6),
+					BackgroundTransparency = 1,
+					Text = text,
+					Font = font,
+					TextSize = size,
+					TextColor3 = color,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					LayoutOrder = order,
+					ZIndex = 24,
+				}, head)
+			end
+			line(version, 24, ACCENT, Enum.Font.GothamBold, 1)
+			if date ~= nil and tostring(date) ~= "" then
+				line(tostring(date), 12, SECONDARY, Enum.Font.Code, 2)
+			end
+			if title ~= nil and tostring(title) ~= "" then
+				line(tostring(title), 13, ACCENT, Enum.Font.Gotham, 3)
+			end
+			bodyDivider()
+		end
+		local function bodyEntry(title, sub, badge, onClick)
+			local btn = new("TextButton", {
+				Size = UDim2.new(1, 0, 0, 54),
+				BackgroundColor3 = WHITE,
+				BackgroundTransparency = 0.92,
+				BorderSizePixel = 0,
+				AutoButtonColor = false,
+				Text = "",
+				LayoutOrder = nextOrder(),
+				ZIndex = 23,
+			}, TabBody)
+			local st = rounded(btn, 10, WHITE, 0.75)
+			new("TextLabel", {
+				Position = UDim2.fromOffset(12, 8),
+				Size = UDim2.new(1, -60, 0, 20),
+				BackgroundTransparency = 1,
+				Text = title,
+				Font = Enum.Font.GothamBold,
+				TextSize = 15,
+				TextColor3 = ACCENT,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				ZIndex = 24,
+			}, btn)
+			new("TextLabel", {
+				Position = UDim2.fromOffset(12, 29),
+				Size = UDim2.new(1, -60, 0, 16),
+				BackgroundTransparency = 1,
+				Text = sub,
+				Font = Enum.Font.Gotham,
+				TextSize = 11,
+				TextColor3 = SECONDARY,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				ZIndex = 24,
+			}, btn)
+			local chev = new("ImageLabel", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -10, 0.5, 0),
+				Size = UDim2.fromOffset(16, 16),
+				BackgroundTransparency = 1,
+				ImageColor3 = SECONDARY,
+				ZIndex = 24,
+			}, btn)
+			iconSet(chev, "chevron-right")
+			if badge then
+				local tag = new("TextLabel", {
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, -34, 0, 9),
+					Size = UDim2.fromOffset(0, 16),
+					AutomaticSize = Enum.AutomaticSize.X,
+					BackgroundColor3 = ACCENT,
+					BackgroundTransparency = 0,
+					Text = " " .. badge .. " ",
+					Font = Enum.Font.Code,
+					TextSize = 10,
+					TextColor3 = SUBMIT_TEXT,
+					ZIndex = 24,
+				}, btn)
+				new("UICorner", { CornerRadius = UDim.new(0, 5) }, tag)
+			end
+			btn.MouseEnter:Connect(function()
+				tween(btn, 0.15, { BackgroundTransparency = 0.82 }, Enum.EasingStyle.Sine)
+				tween(st, 0.15, { Transparency = 0.45 }, Enum.EasingStyle.Sine)
+				tween(chev, 0.2, { Position = UDim2.new(1, -6, 0.5, 0) }, Enum.EasingStyle.Back)
+			end)
+			btn.MouseLeave:Connect(function()
+				tween(btn, 0.15, { BackgroundTransparency = 0.92 }, Enum.EasingStyle.Sine)
+				tween(st, 0.15, { Transparency = 0.75 }, Enum.EasingStyle.Sine)
+				tween(chev, 0.2, { Position = UDim2.new(1, -10, 0.5, 0) }, Enum.EasingStyle.Back)
+			end)
+			btn.MouseButton1Click:Connect(onClick)
+		end
+
+		local function tabRender()
+			local top = tabStack[#tabStack]
+			if not top then
+				return
+			end
+			tabToken += 1
+			bodyClear()
+			tabTitle.Text = top.title
+			local ok = pcall(top.build, tabToken)
+			if not ok then
+				bodyText("Couldn't open this tab.", 13, ERROR)
+			end
+		end
+		local function tabPush(title, build)
+			if finished or destroyed then
+				return
+			end
+			tabStack[#tabStack + 1] = { title = title, build = build }
+			if not tabOpen then
+				tabOpen = true
+				TabPanel.Visible = true
+				TabPanel.Position = UDim2.fromOffset(TAB_X - 12, TAB_Y)
+				tween(TabPanel, 0.35, { GroupTransparency = 0, Position = UDim2.fromOffset(TAB_X, TAB_Y) }, Enum.EasingStyle.Quint)
+			end
+			tabRender()
+		end
+		local function tabBack()
+			if #tabStack == 0 then
+				return
+			end
+			table.remove(tabStack)
+			if #tabStack > 0 then
+				tabRender()
+				return
+			end
+			tabOpen = false
+			tabToken += 1
+			tween(TabPanel, 0.25, { GroupTransparency = 1, Position = UDim2.fromOffset(TAB_X - 12, TAB_Y) }, Enum.EasingStyle.Quad)
+			task.delay(0.28, function()
+				if not tabOpen then
+					TabPanel.Visible = false
+				end
+			end)
+		end
+		backBtn.MouseButton1Click:Connect(tabBack)
+
+		local function fetchInto(url, token, onBody)
+			task.spawn(function()
+				local body = httpGet(url)
+				if token ~= tabToken or not TabBody.Parent then
+					return
+				end
+				onBody(body)
+			end)
+		end
+
+		local UPDATE_KEYS = { "Update", "update", "Updates", "updates", "Changes", "changes", "Changelog", "changelog", "Notes", "notes", "Text", "text", "Description", "description" }
+
+		-- shows version header (optional) + update text. Url = raw txt (or raw json object)
+		local function showUpdate(e, token, showHeader, depth)
+			local ver = pick(e, "Version", "version")
+			if showHeader and ver ~= nil then
+				bodyHeader(vlabel(ver), pick(e, "Date", "date"), pick(e, "Title", "title", "Name", "name"))
+			end
+			local inline = pick(e, table.unpack(UPDATE_KEYS))
+			if inline ~= nil then
+				bodyText(toLines(inline), 13)
+				return
+			end
+			local url = pick(e, "Url", "url")
+			if url and depth < 1 then
+				local txt = bodyText("Loading...", 13, SECONDARY)
+				fetchInto(tostring(url), token, function(body)
+					if not body then
+						txt.Text = "Couldn't load update."
+						txt.TextColor3 = ERROR
+						return
+					end
+					local data = decodeJson(body)
+					if data and #data == 0 then
+						txt:Destroy()
+						showUpdate(data, token, showHeader and ver == nil, depth + 1)
+					else
+						txt.Text = clean(body)
+						txt.TextColor3 = ACCENT
+					end
+				end)
+			else
+				bodyText("No details.", 13, SECONDARY)
+			end
+		end
+
+		local function renderEntries(entries)
+			return function(token)
+				if #entries == 0 then
+					bodyText("No updates yet.", 13, SECONDARY)
+					return
+				end
+				for i, e in ipairs(entries) do
+					local ver = pick(e, "Version", "version")
+					local date = pick(e, "Date", "date")
+					local title = pick(e, "Title", "title", "Name", "name")
+					local sub = {}
+					if date ~= nil then
+						sub[#sub + 1] = tostring(date)
+					end
+					if title ~= nil then
+						sub[#sub + 1] = tostring(title)
+					end
+					local head = ver ~= nil and vlabel(ver) or ("Update " .. i)
+					bodyEntry(head, #sub > 0 and table.concat(sub, "  •  ") or "Tap to view", (i == 1 and #entries > 1) and "LATEST" or nil, function()
+						tabPush(head, function(tk)
+							showUpdate(e, tk, true, 0)
+						end)
+					end)
+				end
+			end
+		end
+
+		local function renderRemote(url)
+			return function(token)
+				local loading = bodyText("Loading changelog...", 13, SECONDARY)
+				fetchInto(url, token, function(body)
+					loading:Destroy()
+					if not body then
+						bodyText("Couldn't load changelog.", 13, ERROR)
+						return
+					end
+					local data = decodeJson(body)
+					if not data then
+						showUpdate({ Text = body }, token, false, 1)
+						return
+					end
+					local list = nil
+					if #data > 0 and type(data[1]) == "table" then
+						list = data
+					else
+						local nested = pick(data, "Entries", "entries", "Updates", "updates")
+						if type(nested) == "table" and type(nested[1]) == "table" then
+							list = nested
+						end
+					end
+					if list then
+						renderEntries(list)(token)
+					else
+						showUpdate(data, token, true, 0)
+					end
+				end)
+			end
+		end
+
+		openChangelog = function()
+			local cl = cfg.Changelog
+			if type(cl) == "string" then
+				cl = { Url = cl }
+			end
+			if type(cl) ~= "table" then
+				return
+			end
+			local list = nil
+			if #cl > 0 then
+				list = cl
+			else
+				local nested = pick(cl, "Entries", "entries", "Updates", "updates")
+				if type(nested) == "table" and type(nested[1]) == "table" then
+					list = nested
+				end
+			end
+			local url = pick(cl, "Url", "url")
+			if list then
+				tabPush("Changelog", renderEntries(list))
+			elseif url and pick(cl, table.unpack(UPDATE_KEYS)) == nil then
+				tabPush("Changelog", renderRemote(tostring(url)))
+			else
+				tabPush("Changelog", function(token)
+					showUpdate(cl, token, true, 0)
+				end)
+			end
+		end
+
+		openInfo = function()
+			local ic = type(cfg.Info) == "table" and cfg.Info or {}
+			tabPush(tostring(ic.Title or "Information"), function(token)
+				bodyRow("Valid keys", tostring(stats.valid))
+				bodyRow("Expired keys", tostring(stats.expired))
+				bodyRow("Last used", stats.last > 0 and os.date("%d %b %Y %H:%M", stats.last) or "Never")
+				if pick(ic, table.unpack(UPDATE_KEYS)) ~= nil or pick(ic, "Url", "url") ~= nil then
+					bodyDivider()
+					showUpdate(ic, token, false, 0)
+				end
+			end)
+		end
+	end
+
 	if cfg.Discord and trim(cfg.Discord) ~= "" then
 		local invite = trim(cfg.Discord)
 		local url = normalizeUrl(invite)
@@ -2093,14 +2745,12 @@ function KeySystem.new(userOptions)
 	end
 	if cfg.Info then
 		addCard("Information", "Tap to view", "info", function()
-			setStatus(
-				("Valid: %d   Expired: %d   Last used: %s"):format(
-					stats.valid,
-					stats.expired,
-					stats.last > 0 and os.date("%d %b %Y %H:%M", stats.last) or "Never"
-				),
-				"success"
-			)
+			openInfo()
+		end)
+	end
+	if cfg.Changelog then
+		addCard("Changelog", "What's new", "scroll-text", function()
+			openChangelog()
 		end)
 	end
 	if type(cfg.Cards) == "table" then
@@ -2252,8 +2902,6 @@ function KeySystem.new(userOptions)
 
 	local ready = false
 	local busy = false
-	local finished = false
-	local destroyed = false
 	local running = true
 	local checking = false
 	local verifyProgress = false
