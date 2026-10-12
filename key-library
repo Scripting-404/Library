@@ -2224,7 +2224,7 @@ function KeySystem.new(userOptions)
 		end
 	end
 
-	local openInfo, openChangelog
+	local openChangelog
 	local finished = false
 	local destroyed = false
 	do
@@ -2236,7 +2236,7 @@ function KeySystem.new(userOptions)
 			Name = "LeftTab",
 			Position = UDim2.fromOffset(TAB_X - 12, TAB_Y),
 			Size = UDim2.fromOffset(336, 320),
-			BackgroundColor3 = Color3.fromRGB(16, 17, 23),
+			BackgroundColor3 = INPUT_BG,
 			BackgroundTransparency = 0.04,
 			BorderSizePixel = 0,
 			GroupTransparency = 1,
@@ -2244,52 +2244,70 @@ function KeySystem.new(userOptions)
 			Active = true,
 			ZIndex = 20,
 		}, Content)
-		rounded(TabPanel, 12, SECONDARY, 0.45)
+		local panelStroke = rounded(TabPanel, 9, SECONDARY, 0.4)
+		panelStroke.Thickness = 1.5
 
-		local backBtn = new("TextButton", {
-			Name = "Back",
-			Position = UDim2.fromOffset(12, 12),
-			Size = UDim2.fromOffset(84, 30),
-			BackgroundColor3 = BTN_BG,
-			BackgroundTransparency = 0.1,
-			BorderSizePixel = 0,
-			AutoButtonColor = false,
-			Text = "",
-			ZIndex = 22,
-		}, TabPanel)
-		rounded(backBtn, 8, SECONDARY, 0.5)
-		local backIcon = new("ImageLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.fromOffset(10, 15),
-			Size = UDim2.fromOffset(16, 16),
-			BackgroundTransparency = 1,
-			ImageColor3 = ACCENT,
-			ZIndex = 23,
-		}, backBtn)
-		iconSet(backIcon, "arrow-left")
-		new("TextLabel", {
-			Position = UDim2.fromOffset(32, 0),
-			Size = UDim2.new(1, -38, 1, 0),
-			BackgroundTransparency = 1,
-			Text = "Back",
-			Font = Enum.Font.GothamBold,
-			TextSize = 13,
-			TextColor3 = ACCENT,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			ZIndex = 23,
-		}, backBtn)
-		backBtn.MouseEnter:Connect(function()
-			tween(backBtn, 0.15, { BackgroundColor3 = BTN_HOVER }, Enum.EasingStyle.Sine)
-			tween(backIcon, 0.2, { Position = UDim2.fromOffset(6, 15) }, Enum.EasingStyle.Back)
-		end)
-		backBtn.MouseLeave:Connect(function()
-			tween(backBtn, 0.15, { BackgroundColor3 = BTN_BG }, Enum.EasingStyle.Sine)
-			tween(backIcon, 0.2, { Position = UDim2.fromOffset(10, 15) }, Enum.EasingStyle.Back)
-		end)
-
+	local backBtn = new("TextButton", {
+		Name = "Back",
+		Position = UDim2.fromOffset(12, 10),
+		Size = UDim2.fromOffset(96, 34),
+		BackgroundColor3 = BTN_BG,
+		BackgroundTransparency = 0.05,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		Text = "",
+		ClipsDescendants = true,
+		ZIndex = 22,
+	}, TabPanel)
+	rounded(backBtn, 9)
+	local backScale = new("UIScale", { Scale = 1 }, backBtn)
+	local backStroke = new("UIStroke", {
+		Color = ACCENT,
+		Thickness = 1.5,
+		Transparency = 0.35,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	}, backBtn)
+	local backIcon = new("ImageLabel", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromOffset(12, 17),
+		Size = UDim2.fromOffset(18, 18),
+		BackgroundTransparency = 1,
+		ImageColor3 = ACCENT,
+		ZIndex = 23,
+	}, backBtn)
+	iconSet(backIcon, "arrow-left")
+	new("TextLabel", {
+		Position = UDim2.fromOffset(38, 0),
+		Size = UDim2.new(1, -44, 1, 0),
+		BackgroundTransparency = 1,
+		Text = "Back",
+		Font = Enum.Font.GothamBold,
+		TextSize = 14,
+		TextColor3 = ACCENT,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 23,
+	}, backBtn)
+	backBtn.MouseEnter:Connect(function()
+		tween(backBtn, 0.15, { BackgroundColor3 = BTN_HOVER }, Enum.EasingStyle.Sine)
+		tween(backScale, 0.2, { Scale = 1.04 }, Enum.EasingStyle.Back)
+		tween(backStroke, 0.2, { Transparency = 0 }, Enum.EasingStyle.Sine)
+		tween(backIcon, 0.25, { Position = UDim2.fromOffset(8, 17) }, Enum.EasingStyle.Back)
+	end)
+	backBtn.MouseLeave:Connect(function()
+		tween(backBtn, 0.15, { BackgroundColor3 = BTN_BG }, Enum.EasingStyle.Sine)
+		tween(backScale, 0.2, { Scale = 1 }, Enum.EasingStyle.Sine)
+		tween(backStroke, 0.2, { Transparency = 0.35 }, Enum.EasingStyle.Sine)
+		tween(backIcon, 0.25, { Position = UDim2.fromOffset(12, 17) }, Enum.EasingStyle.Back)
+	end)
+	backBtn.MouseButton1Down:Connect(function()
+		tween(backScale, 0.08, { Scale = 0.94 }, Enum.EasingStyle.Sine)
+	end)
+	backBtn.MouseButton1Up:Connect(function()
+		tween(backScale, 0.18, { Scale = 1.04 }, Enum.EasingStyle.Back)
+	end)
 		local tabTitle = new("TextLabel", {
-			Position = UDim2.fromOffset(108, 12),
-			Size = UDim2.new(1, -120, 0, 30),
+			Position = UDim2.fromOffset(120, 10),
+			Size = UDim2.new(1, -132, 0, 34),
 			BackgroundTransparency = 1,
 			Text = "",
 			Font = Enum.Font.GothamBold,
@@ -2300,7 +2318,7 @@ function KeySystem.new(userOptions)
 			ZIndex = 22,
 		}, TabPanel)
 		new("Frame", {
-			Position = UDim2.fromOffset(12, 50),
+			Position = UDim2.fromOffset(12, 54),
 			Size = UDim2.new(1, -24, 0, 1),
 			BackgroundColor3 = SECONDARY,
 			BackgroundTransparency = 0.7,
@@ -2308,8 +2326,8 @@ function KeySystem.new(userOptions)
 			ZIndex = 22,
 		}, TabPanel)
 		local TabBody = new("ScrollingFrame", {
-			Position = UDim2.fromOffset(12, 58),
-			Size = UDim2.new(1, -24, 1, -70),
+			Position = UDim2.fromOffset(12, 64),
+			Size = UDim2.new(1, -24, 1, -76),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			ScrollBarThickness = 3,
@@ -2353,7 +2371,7 @@ function KeySystem.new(userOptions)
 			if type(v) == "table" then
 				local out = {}
 				for _, line in ipairs(v) do
-					out[#out + 1] = "• " .. tostring(line)
+					out[#out + 1] = "â€¢ " .. tostring(line)
 				end
 				return table.concat(out, "\n")
 			end
@@ -2462,80 +2480,125 @@ function KeySystem.new(userOptions)
 			end
 			bodyDivider()
 		end
-		local function bodyEntry(title, sub, badge, onClick)
-			local btn = new("TextButton", {
-				Size = UDim2.new(1, 0, 0, 54),
-				BackgroundColor3 = WHITE,
-				BackgroundTransparency = 0.92,
-				BorderSizePixel = 0,
-				AutoButtonColor = false,
-				Text = "",
-				LayoutOrder = nextOrder(),
-				ZIndex = 23,
-			}, TabBody)
-			local st = rounded(btn, 10, WHITE, 0.75)
-			new("TextLabel", {
-				Position = UDim2.fromOffset(12, 8),
-				Size = UDim2.new(1, -60, 0, 20),
-				BackgroundTransparency = 1,
-				Text = title,
-				Font = Enum.Font.GothamBold,
-				TextSize = 15,
-				TextColor3 = ACCENT,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextTruncate = Enum.TextTruncate.AtEnd,
+	local function bodyCard(text, color)
+		local box = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundColor3 = INPUT_BG,
+			BackgroundTransparency = 0.15,
+			BorderSizePixel = 0,
+			LayoutOrder = nextOrder(),
+			ZIndex = 23,
+		}, TabBody)
+		local boxStroke = rounded(box, 9, SECONDARY, 0.4)
+		boxStroke.Thickness = 1.5
+		new("UIPadding", {
+			PaddingTop = UDim.new(0, 12),
+			PaddingBottom = UDim.new(0, 12),
+			PaddingLeft = UDim.new(0, 14),
+			PaddingRight = UDim.new(0, 14),
+		}, box)
+		return new("TextLabel", {
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			Text = text,
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			Font = Enum.Font.Gotham,
+			TextSize = 13,
+			TextColor3 = color or ACCENT,
+			ZIndex = 24,
+		}, box)
+	end
+	local function bodyEntry(title, sub, badge, onClick)
+		local btn = new("TextButton", {
+			Size = UDim2.new(1, 0, 0, 56),
+			BackgroundColor3 = BTN_BG,
+			BackgroundTransparency = 0.05,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			Text = "",
+			LayoutOrder = nextOrder(),
+			ZIndex = 23,
+		}, TabBody)
+		rounded(btn, 9)
+		local scale = new("UIScale", { Scale = 1 }, btn)
+		local st = new("UIStroke", {
+			Color = ACCENT,
+			Thickness = 1.5,
+			Transparency = 0.35,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}, btn)
+		new("TextLabel", {
+			Position = UDim2.fromOffset(14, 9),
+			Size = UDim2.new(1, -64, 0, 20),
+			BackgroundTransparency = 1,
+			Text = title,
+			Font = Enum.Font.GothamBold,
+			TextSize = 15,
+			TextColor3 = ACCENT,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ZIndex = 24,
+		}, btn)
+		new("TextLabel", {
+			Position = UDim2.fromOffset(14, 30),
+			Size = UDim2.new(1, -64, 0, 16),
+			BackgroundTransparency = 1,
+			Text = sub,
+			Font = Enum.Font.Gotham,
+			TextSize = 11,
+			TextColor3 = SECONDARY,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ZIndex = 24,
+		}, btn)
+		local chev = new("ImageLabel", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -12, 0.5, 0),
+			Size = UDim2.fromOffset(18, 18),
+			BackgroundTransparency = 1,
+			ImageColor3 = ACCENT,
+			ZIndex = 24,
+		}, btn)
+		iconSet(chev, "chevron-right")
+		if badge then
+			local tag = new("TextLabel", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -38, 0, 10),
+				Size = UDim2.fromOffset(0, 16),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundColor3 = ACCENT,
+				BackgroundTransparency = 0,
+				Text = " " .. badge .. " ",
+				Font = Enum.Font.Code,
+				TextSize = 10,
+				TextColor3 = SUBMIT_TEXT,
 				ZIndex = 24,
 			}, btn)
-			new("TextLabel", {
-				Position = UDim2.fromOffset(12, 29),
-				Size = UDim2.new(1, -60, 0, 16),
-				BackgroundTransparency = 1,
-				Text = sub,
-				Font = Enum.Font.Gotham,
-				TextSize = 11,
-				TextColor3 = SECONDARY,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				ZIndex = 24,
-			}, btn)
-			local chev = new("ImageLabel", {
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -10, 0.5, 0),
-				Size = UDim2.fromOffset(16, 16),
-				BackgroundTransparency = 1,
-				ImageColor3 = SECONDARY,
-				ZIndex = 24,
-			}, btn)
-			iconSet(chev, "chevron-right")
-			if badge then
-				local tag = new("TextLabel", {
-					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, -34, 0, 9),
-					Size = UDim2.fromOffset(0, 16),
-					AutomaticSize = Enum.AutomaticSize.X,
-					BackgroundColor3 = ACCENT,
-					BackgroundTransparency = 0,
-					Text = " " .. badge .. " ",
-					Font = Enum.Font.Code,
-					TextSize = 10,
-					TextColor3 = SUBMIT_TEXT,
-					ZIndex = 24,
-				}, btn)
-				new("UICorner", { CornerRadius = UDim.new(0, 5) }, tag)
-			end
-			btn.MouseEnter:Connect(function()
-				tween(btn, 0.15, { BackgroundTransparency = 0.82 }, Enum.EasingStyle.Sine)
-				tween(st, 0.15, { Transparency = 0.45 }, Enum.EasingStyle.Sine)
-				tween(chev, 0.2, { Position = UDim2.new(1, -6, 0.5, 0) }, Enum.EasingStyle.Back)
-			end)
-			btn.MouseLeave:Connect(function()
-				tween(btn, 0.15, { BackgroundTransparency = 0.92 }, Enum.EasingStyle.Sine)
-				tween(st, 0.15, { Transparency = 0.75 }, Enum.EasingStyle.Sine)
-				tween(chev, 0.2, { Position = UDim2.new(1, -10, 0.5, 0) }, Enum.EasingStyle.Back)
-			end)
-			btn.MouseButton1Click:Connect(onClick)
+			new("UICorner", { CornerRadius = UDim.new(0, 5) }, tag)
 		end
-
+		btn.MouseEnter:Connect(function()
+			tween(btn, 0.15, { BackgroundColor3 = BTN_HOVER }, Enum.EasingStyle.Sine)
+			tween(st, 0.2, { Transparency = 0 }, Enum.EasingStyle.Sine)
+			tween(chev, 0.25, { Position = UDim2.new(1, -8, 0.5, 0) }, Enum.EasingStyle.Back)
+		end)
+		btn.MouseLeave:Connect(function()
+			tween(btn, 0.15, { BackgroundColor3 = BTN_BG }, Enum.EasingStyle.Sine)
+			tween(scale, 0.2, { Scale = 1 }, Enum.EasingStyle.Sine)
+			tween(st, 0.2, { Transparency = 0.35 }, Enum.EasingStyle.Sine)
+			tween(chev, 0.25, { Position = UDim2.new(1, -12, 0.5, 0) }, Enum.EasingStyle.Back)
+		end)
+		btn.MouseButton1Down:Connect(function()
+			tween(scale, 0.08, { Scale = 0.97 }, Enum.EasingStyle.Sine)
+		end)
+		btn.MouseButton1Up:Connect(function()
+			tween(scale, 0.18, { Scale = 1 }, Enum.EasingStyle.Back)
+		end)
+		btn.MouseButton1Click:Connect(onClick)
+	end
 		local function tabRender()
 			local top = tabStack[#tabStack]
 			if not top then
@@ -2602,12 +2665,12 @@ function KeySystem.new(userOptions)
 			end
 			local inline = pick(e, table.unpack(UPDATE_KEYS))
 			if inline ~= nil then
-				bodyText(toLines(inline), 13)
+				bodyCard(toLines(inline))
 				return
 			end
 			local url = pick(e, "Url", "url")
 			if url and depth < 1 then
-				local txt = bodyText("Loading...", 13, SECONDARY)
+				local txt = bodyCard("Loading...", SECONDARY)
 				fetchInto(tostring(url), token, function(body)
 					if not body then
 						txt.Text = "Couldn't load update."
@@ -2616,7 +2679,7 @@ function KeySystem.new(userOptions)
 					end
 					local data = decodeJson(body)
 					if data and #data == 0 then
-						txt:Destroy()
+						txt.Parent:Destroy()
 						showUpdate(data, token, showHeader and ver == nil, depth + 1)
 					else
 						txt.Text = clean(body)
@@ -2646,7 +2709,7 @@ function KeySystem.new(userOptions)
 						sub[#sub + 1] = tostring(title)
 					end
 					local head = ver ~= nil and vlabel(ver) or ("Update " .. i)
-					bodyEntry(head, #sub > 0 and table.concat(sub, "  •  ") or "Tap to view", (i == 1 and #entries > 1) and "LATEST" or nil, function()
+					bodyEntry(head, #sub > 0 and table.concat(sub, "  â€¢  ") or "Tap to view", (i == 1 and #entries > 1) and "LATEST" or nil, function()
 						tabPush(head, function(tk)
 							showUpdate(e, tk, true, 0)
 						end)
@@ -2715,19 +2778,6 @@ function KeySystem.new(userOptions)
 				end)
 			end
 		end
-
-		openInfo = function()
-			local ic = type(cfg.Info) == "table" and cfg.Info or {}
-			tabPush(tostring(ic.Title or "Information"), function(token)
-				bodyRow("Valid keys", tostring(stats.valid))
-				bodyRow("Expired keys", tostring(stats.expired))
-				bodyRow("Last used", stats.last > 0 and os.date("%d %b %Y %H:%M", stats.last) or "Never")
-				if pick(ic, table.unpack(UPDATE_KEYS)) ~= nil or pick(ic, "Url", "url") ~= nil then
-					bodyDivider()
-					showUpdate(ic, token, false, 0)
-				end
-			end)
-		end
 	end
 
 	if cfg.Discord and trim(cfg.Discord) ~= "" then
@@ -2745,7 +2795,14 @@ function KeySystem.new(userOptions)
 	end
 	if cfg.Info then
 		addCard("Information", "Tap to view", "info", function()
-			openInfo()
+			setStatus(
+				("Valid: %d   Expired: %d   Last used: %s"):format(
+					stats.valid,
+					stats.expired,
+					stats.last > 0 and os.date("%d %b %Y %H:%M", stats.last) or "Never"
+				),
+				"success"
+			)
 		end)
 	end
 	if cfg.Changelog then
