@@ -1620,7 +1620,6 @@ function KeySystem.new(userOptions)
 	}, Gui)
 	local ContentScale = new("UIScale", { Scale = 1 }, Content)
 
-	local tagScale = new("UIScale", { Scale = 1 }, Gui)
 	local TagHolder = new("Frame", {
 		Name = "Tag",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -1637,6 +1636,7 @@ function KeySystem.new(userOptions)
 		Padding = UDim.new(0, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, TagHolder)
+	local tagScale = new("UIScale", { Scale = 1 }, TagHolder)
 	local TagIcon = new("ImageLabel", {
 		Size = UDim2.fromOffset(16, 16),
 		BackgroundTransparency = 1,
