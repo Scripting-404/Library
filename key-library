@@ -1,47 +1,10 @@
---[[
-	Scripting404 Key System - UI Library
-
-	Contoh pemakaian:
-
-	local KeySystem = loadstring(game:HttpGet("URL_LIBRARY_INI"))()
-
-	KeySystem.new({
-		Title = "Scripting404",
-		Subtitle = "KEY SYSTEM",
-		Folder = "Scripting404",
-
-		-- Card kolom kiri (opsional). Kalau tidak di-set, area ini kosong.
-		Discord = "discord.gg/xxxx",
-		Website = "https://example.com",
-		Info = true,                       -- card statistik key lokal
-		Cards = {
-			{ Title = "Changelog", Subtitle = "v2.1", Icon = "scroll", Url = "https://example.com" },
-			{ Title = "Support", Subtitle = "Klik untuk bantuan", Icon = "life-buoy", OnClick = function() end },
-		},
-
-		KeySystem = {
-			Key = { "KEY-ABC123" },                -- list, string, atau function(key) -> valid, reason
-			API = {                                 -- platoboost | panda | jnkie | custom (bisa lebih dari satu)
-				{ Type = "panda", ServiceId = "scripting404" },
-			},
-			URL = "https://example.com/getkey",    -- link tombol Get Key (opsional)
-		},
-
-		Callback = function(key)
-			-- script utama kamu di sini
-		end,
-	})
-
-	Atau tunggu sampai key valid (blocking):
-	local key = KeySystem.Authenticate({ ... })
-]]
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
 local Stats = game:GetService("Stats")
+local ContentProvider = game:GetService("ContentProvider")
 local ContextActionService = game:GetService("ContextActionService")
 local HapticService = game:GetService("HapticService")
 local HttpService = game:GetService("HttpService")
@@ -58,32 +21,56 @@ local KeySystem = {}
 local ICONS_URL = "https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"
 local JSON_HEADERS = { ["Content-Type"] = "application/json" }
 local DESIGN_W, DESIGN_H = 920, 400
-local LEFT_W = 370
-local CARD_X, CARD_W, CARD_Y0, CARD_H, CARD_GAP = 65, 240, 200, 42, 6
-local MAX_CARDS = 4
-local GRID, CENTER, GRID_R, STROKE, FORM_TIME = 41, 21, 20, 0.055, 1.2
+local GRID, CENTER, GRID_R, STROKE, FORM_TIME, HOLD_TIME = 41, 21, 20, 0.055, 1.2, 1.0
+local MAX_CARDS = 6
+local INTRO_TOTAL = 0.3 + 2 * (FORM_TIME + 0.15 + HOLD_TIME)
 local CHARS = { "0", "1", "{", "}", "<", ">", "/", ";", "#", "$", "%", "&", "*", "+", "=", "|" }
+local SCRAMBLE_CHARS = {}
+for c in ("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&*+=<>/"):gmatch(".") do
+	SCRAMBLE_CHARS[#SCRAMBLE_CHARS + 1] = c
+end
 local PHRASES = {
 	"Welcome back, {name}",
 	"Good to see you again",
 	"Enter your key to continue",
 	"Unlock the full experience",
-	"Verify to get started",
-	"Hello, {name}!",
-	"Stay sharp, {name}",
-	"Systems online and ready",
 	"Your key is your pass",
+	"Verify to get started",
 	"Almost there, {name}",
+	"Authenticate to proceed",
+	"Systems online and ready",
+	"Access is one key away",
+	"Hello again, {name}",
+	"Locked in and loaded",
+	"Ready when you are",
+	"Powering up the engine",
 	"Welcome to the grid",
+	"Stay sharp, {name}",
+	"Let the show begin",
+	"Entering the matrix",
+	"Your session is secure",
+	"Hello, {name}!",
+	"Nice to meet you, {name}",
+	"Glad you made it, {name}",
 	"Everything is under control",
+	"Loading something awesome",
+	"Initializing your workspace",
+	"Syncing with the mainframe",
+	"Secure channel established",
+	"Verifying your credentials",
+	"Built for speed",
+	"No lag, just flow",
+	"Showtime, {name}",
+	"Standing by for your key",
+	"All systems nominal",
+	"Stay safe out there, {name}",
 }
-local SHAPE_NAMES = { "cyber", "code", "shield", "lock", "bolt", "gear", "key", "atom", "core" }
 
 local DEFAULTS = {
-	Title = "Scripting404",
+	Title = "SCRIPTING404",
 	Subtitle = "KEY SYSTEM",
-	Logo = nil,                    -- rbxassetid. Kosong = logo kode animasi bawaan
-	Folder = "Scripting404",       -- folder penyimpanan key dan statistik
+	Logo = nil,
+	Folder = "Scripting404",
 	SaveKey = true,
 	Accent = Color3.fromRGB(238, 240, 246),
 	Secondary = Color3.fromRGB(128, 134, 148),
@@ -93,18 +80,14 @@ local DEFAULTS = {
 	Success = Color3.fromRGB(120, 235, 170),
 	Error = Color3.fromRGB(255, 112, 126),
 	Intro = true,
-	Vibrate = true,                -- getaran 1 kali saat area kosong ditekan
-	Discord = nil,                 -- nil / "" = card tidak tampil
-	Website = nil,                 -- nil / "" = card tidak tampil
-	Info = false,                  -- true = tampilkan card statistik
-	Cards = nil,                   -- card tambahan
+	Vibrate = true,
+	Discord = nil,
+	Website = nil,
+	Info = false,
+	Cards = nil,
 	KeySystem = nil,
 	Callback = nil,
 }
-
--- ============================================================
--- Helper umum
--- ============================================================
 
 local function new(class, props, parent)
 	local inst = Instance.new(class)
@@ -135,16 +118,27 @@ local function tweenAfter(inst, delay, time, props, style)
 	return t
 end
 
+local function loopTween(inst, time, props, style, reverses)
+	local t = TweenService:Create(
+		inst,
+		TweenInfo.new(time, style or Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, reverses or false, 0),
+		props
+	)
+	t:Play()
+	return t
+end
+
 local function rounded(parent, radius, strokeColor, strokeAlpha)
 	new("UICorner", { CornerRadius = UDim.new(0, radius) }, parent)
 	if strokeColor then
-		new("UIStroke", {
+		return new("UIStroke", {
 			Color = strokeColor,
 			Thickness = 1,
 			Transparency = strokeAlpha or 0.3,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		}, parent)
 	end
+	return nil
 end
 
 local function trim(s)
@@ -167,6 +161,49 @@ local function expandName(phrase)
 	return (phrase:gsub("{name}", function()
 		return LocalPlayer.DisplayName
 	end))
+end
+
+local function snapshot(root)
+	local list = {}
+	local function add(inst)
+		local props = {}
+		if inst:IsA("GuiObject") then
+			props.BackgroundTransparency = inst.BackgroundTransparency
+		end
+		if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+			props.TextTransparency = inst.TextTransparency
+		end
+		if inst:IsA("ImageLabel") or inst:IsA("ImageButton") then
+			props.ImageTransparency = inst.ImageTransparency
+		end
+		if inst:IsA("UIStroke") then
+			props.Transparency = inst.Transparency
+		end
+		if next(props) then
+			list[#list + 1] = { inst = inst, props = props }
+		end
+	end
+	add(root)
+	for _, d in ipairs(root:GetDescendants()) do
+		add(d)
+	end
+	return list
+end
+
+local function apply(list, visible, time, style)
+	for _, it in ipairs(list) do
+		local goal = {}
+		for prop, orig in pairs(it.props) do
+			goal[prop] = 1 - (1 - orig) * visible
+		end
+		if time and time > 0 then
+			tween(it.inst, time, goal, style or Enum.EasingStyle.Sine)
+		else
+			for prop, v in pairs(goal) do
+				it.inst[prop] = v
+			end
+		end
+	end
 end
 
 local function httpRequestFn()
@@ -282,10 +319,6 @@ local function resolveHost()
 	return LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- ============================================================
--- SHA-256 (dipakai Platoboost untuk identifier dan verifikasi nonce)
--- ============================================================
-
 local K256 = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
 	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -342,10 +375,6 @@ local function sha256(msg)
 
 	return string.format("%08x%08x%08x%08x%08x%08x%08x%08x", h[1], h[2], h[3], h[4], h[5], h[6], h[7], h[8])
 end
-
--- ============================================================
--- Key services (semua key system)
--- ============================================================
 
 local function platoboostService(cfg)
 	local service = tonumber(cfg.ServiceId or cfg.Service) or cfg.ServiceId or cfg.Service
@@ -429,7 +458,6 @@ local function platoboostService(cfg)
 				return false, "failed to verify integrity."
 			end
 
-			-- Key dari website Platoboost (KEY_...) harus di-redeem dulu
 			if key:sub(1, 4) == "KEY_" then
 				local n2 = makeNonce()
 				local body = { identifier = identifier, key = key }
@@ -565,7 +593,7 @@ local function pandaService(cfg)
 end
 
 local function jnkieService(cfg)
-	local lib, loadErr
+	local lib
 	local function client()
 		if lib then
 			return lib
@@ -667,10 +695,6 @@ local function buildServices(api)
 	return out
 end
 
--- ============================================================
--- Getaran (hanya 1 kali)
--- ============================================================
-
 local function setMotors(strength)
 	for _, inputType in ipairs({ Enum.UserInputType.Touch, Enum.UserInputType.Gamepad1 }) do
 		local ok, supported = pcall(function()
@@ -693,10 +717,6 @@ local function vibrateOnce()
 	task.wait(0.12)
 	setMotors(0)
 end
-
--- ============================================================
--- Icon (lucide) - dimuat sekali, label menunggu sampai siap
--- ============================================================
 
 local IconLib = nil
 local pendingIcons = {}
@@ -761,25 +781,25 @@ local function iconSet(label, name)
 	ensureIcons()
 end
 
--- ============================================================
--- Geometri logo kode (grid kecil berisi karakter)
--- ============================================================
+local Geo = {}
 
-local function hyp(a, b)
+function Geo.hyp(a, b)
 	return math.sqrt(a * a + b * b)
 end
 
-local function segDist(u, v, x1, y1, x2, y2)
+function Geo.seg(u, v, x1, y1, x2, y2)
 	local dx, dy = x2 - x1, y2 - y1
 	local t = math.clamp(((u - x1) * dx + (v - y1) * dy) / (dx * dx + dy * dy), 0, 1)
-	return hyp(u - (x1 + t * dx), v - (y1 + t * dy))
+	return Geo.hyp(u - (x1 + t * dx), v - (y1 + t * dy))
 end
 
-local function polyDist(u, v, pts)
+function Geo.poly(u, v, pts)
 	local m = math.huge
-	for i = 1, #pts do
-		local a, b = pts[i], pts[i % #pts + 1]
-		local d = segDist(u, v, a[1], a[2], b[1], b[2])
+	local n = #pts
+	for i = 1, n do
+		local a = pts[i]
+		local b = pts[i % n + 1]
+		local d = Geo.seg(u, v, a[1], a[2], b[1], b[2])
 		if d < m then
 			m = d
 		end
@@ -787,11 +807,13 @@ local function polyDist(u, v, pts)
 	return m
 end
 
-local function isIn(u, v, pts)
+function Geo.inside(u, v, pts)
 	local result = false
-	local j = #pts
-	for i = 1, #pts do
-		local xi, yi, xj, yj = pts[i][1], pts[i][2], pts[j][1], pts[j][2]
+	local n = #pts
+	local j = n
+	for i = 1, n do
+		local xi, yi = pts[i][1], pts[i][2]
+		local xj, yj = pts[j][1], pts[j][2]
 		if (yi > v) ~= (yj > v) and u < (xj - xi) * (v - yi) / (yj - yi) + xi then
 			result = not result
 		end
@@ -800,27 +822,56 @@ local function isIn(u, v, pts)
 	return result
 end
 
-local function rbox(u, v, cx, cy, hx, hy, r)
+function Geo.rbox(u, v, cx, cy, hx, hy, r)
 	local qx = math.abs(u - cx) - (hx - r)
 	local qy = math.abs(v - cy) - (hy - r)
-	return hyp(math.max(qx, 0), math.max(qy, 0)) + math.min(math.max(qx, qy), 0) - r
+	return Geo.hyp(math.max(qx, 0), math.max(qy, 0)) + math.min(math.max(qx, qy), 0) - r
 end
 
-local function ell(u, v, ang, a, b)
+function Geo.ell(u, v, ang, a, b)
 	local ca, sa = math.cos(ang), math.sin(ang)
 	local x = u * ca + v * sa
 	local y = -u * sa + v * ca
 	return (x / a) ^ 2 + (y / b) ^ 2
 end
 
-local HEX = { { 0, -0.86 }, { 0.745, -0.43 }, { 0.745, 0.43 }, { 0, 0.86 }, { -0.745, 0.43 }, { -0.745, -0.43 } }
-local BOLT = { { 0.18, -0.92 }, { -0.52, 0.08 }, { -0.06, 0.08 }, { -0.2, 0.92 }, { 0.52, -0.16 }, { 0.06, -0.16 } }
-local SHIELD = { { 0, -0.88 }, { 0.74, -0.62 }, { 0.74, 0.06 }, { 0.46, 0.52 }, { 0, 0.9 }, { -0.46, 0.52 }, { -0.74, 0.06 }, { -0.74, -0.62 } }
+function Geo.glyph(g, bx, by)
+	if bx < 0 or bx >= 5 or by < 0 or by >= 7 then
+		return false
+	end
+	return g[by + 1]:sub(bx + 1, bx + 1) == "X"
+end
 
--- Setiap bentuk mengembalikan 0 (kosong), 1 (penuh), atau 2 (setengah kepadatan)
+Geo.H = { "X...X", "X...X", "X...X", "XXXXX", "X...X", "X...X", "X...X" }
+Geo.I = { "XXXXX", "..X..", "..X..", "..X..", "..X..", "..X..", "XXXXX" }
+Geo.HEX = { { 0, -0.86 }, { 0.745, -0.43 }, { 0.745, 0.43 }, { 0, 0.86 }, { -0.745, 0.43 }, { -0.745, -0.43 } }
+Geo.TAIL = { { -0.52, 0.42 }, { -0.66, 0.88 }, { -0.12, 0.46 } }
+Geo.SHIELD = { { 0, -0.88 }, { 0.74, -0.62 }, { 0.74, 0.06 }, { 0.46, 0.52 }, { 0, 0.9 }, { -0.46, 0.52 }, { -0.74, 0.06 }, { -0.74, -0.62 } }
+Geo.BOLT = { { 0.18, -0.92 }, { -0.52, 0.08 }, { -0.06, 0.08 }, { -0.2, 0.92 }, { 0.52, -0.16 }, { 0.06, -0.16 } }
+Geo.PINS = { -0.3, 0, 0.3 }
+Geo.DOTS = { -0.7, -0.54, -0.38 }
+Geo.ATOM = { 0, math.pi / 3, 2 * math.pi / 3 }
+
 local Shapes = {
+	roblox = function(u, v)
+		local a = math.rad(-14)
+		local ru = u * math.cos(a) - v * math.sin(a)
+		local rv = u * math.sin(a) + v * math.cos(a)
+		local m = math.max(math.abs(ru), math.abs(rv))
+		return (m <= 0.78 and m > 0.36) and 2 or 0
+	end,
+	lua = function(u, v)
+		if Geo.hyp(u - 0.7, v + 0.7) <= 0.17 then
+			return 1
+		end
+		local bd = Geo.hyp(u + 0.08, v - 0.08)
+		if bd <= 0.78 and not (bd >= 0.40 and bd <= 0.52) then
+			return 2
+		end
+		return 0
+	end,
 	cyber = function(u, v)
-		if polyDist(u, v, HEX) <= STROKE then
+		if Geo.poly(u, v, Geo.HEX) <= STROKE then
 			return 1
 		end
 		local d = math.abs(u) + math.abs(v)
@@ -831,83 +882,47 @@ local Shapes = {
 	end,
 	code = function(u, v)
 		local w = 0.07
-		if segDist(u, v, -0.30, -0.56, -0.84, 0) <= w or segDist(u, v, -0.84, 0, -0.30, 0.56) <= w then
+		if Geo.seg(u, v, -0.30, -0.56, -0.84, 0.0) <= w or Geo.seg(u, v, -0.84, 0.0, -0.30, 0.56) <= w then
 			return 1
 		end
-		if segDist(u, v, 0.30, -0.56, 0.84, 0) <= w or segDist(u, v, 0.84, 0, 0.30, 0.56) <= w then
+		if Geo.seg(u, v, 0.30, -0.56, 0.84, 0.0) <= w or Geo.seg(u, v, 0.84, 0.0, 0.30, 0.56) <= w then
 			return 1
 		end
-		if segDist(u, v, 0.16, -0.66, -0.16, 0.66) <= w then
-			return 1
-		end
-		return 0
-	end,
-	shield = function(u, v)
-		if polyDist(u, v, SHIELD) <= STROKE then
-			return 1
-		end
-		if segDist(u, v, -0.30, 0, -0.08, 0.24) <= 0.07 or segDist(u, v, -0.08, 0.24, 0.32, -0.22) <= 0.07 then
+		if Geo.seg(u, v, 0.16, -0.66, -0.16, 0.66) <= w then
 			return 1
 		end
 		return 0
 	end,
-	lock = function(u, v)
-		local sd = rbox(u, v, 0, 0.3, 0.56, 0.46, 0.1)
-		if sd <= 0 then
-			if hyp(u, v - 0.24) <= 0.1 or (math.abs(u) <= 0.04 and v >= 0.24 and v <= 0.5) then
-				return 0
-			end
-			return (sd < -STROKE) and 2 or 1
-		end
-		if v <= -0.1 and math.abs(hyp(u, v + 0.1) - 0.34) <= 0.065 then
+	hello = function(u, v, cx, cy)
+		local sd = Geo.rbox(u, v, 0, -0.12, 0.88, 0.60, 0.24)
+		local tx = cx + 11
+		local gy = math.floor((cy + 9) / 2)
+		if tx >= 0 and tx < 10 and Geo.glyph(Geo.H, math.floor(tx / 2), gy) then
 			return 1
 		end
-		return 0
-	end,
-	bolt = function(u, v)
-		return isIn(u, v, BOLT) and 1 or 0
-	end,
-	gear = function(u, v)
-		local r = hyp(u, v)
-		if math.abs(r - 0.52) <= 0.09 or math.abs(r - 0.2) <= 0.07 then
+		local tx2 = tx - 12
+		if tx2 >= 0 and tx2 < 10 and Geo.glyph(Geo.I, math.floor(tx2 / 2), gy) then
 			return 1
 		end
-		if r >= 0.58 and r <= 0.86 and math.cos(8 * math.atan2(v, u)) > 0.25 then
+		if Geo.inside(u, v, Geo.TAIL) then
+			return 0
+		end
+		if sd > 0 and Geo.poly(u, v, Geo.TAIL) <= STROKE then
 			return 1
 		end
-		return 0
-	end,
-	key = function(u, v)
-		if math.abs(hyp(u + 0.42, v + 0.36) - 0.3) <= 0.07 then
+		if math.abs(sd) <= STROKE then
 			return 1
-		end
-		if segDist(u, v, -0.2, -0.14, 0.74, 0.8) <= 0.065 then
-			return 1
-		end
-		if segDist(u, v, 0.5, 0.56, 0.66, 0.4) <= 0.06 or segDist(u, v, 0.34, 0.4, 0.5, 0.24) <= 0.06 then
-			return 1
-		end
-		return 0
-	end,
-	atom = function(u, v)
-		if hyp(u, v) <= 0.13 then
-			return 1
-		end
-		for _, ang in ipairs({ 0, math.pi / 3, 2 * math.pi / 3 }) do
-			if math.abs(ell(u, v, ang, 0.88, 0.32) - 1) <= 0.2 then
-				return 1
-			end
 		end
 		return 0
 	end,
 	core = function(u, v)
-		if math.abs(rbox(u, v, 0, 0, 0.52, 0.52, 0.08)) <= STROKE then
+		if math.abs(Geo.rbox(u, v, 0, 0, 0.52, 0.52, 0.08)) <= STROKE then
 			return 1
 		end
 		if math.max(math.abs(u), math.abs(v)) <= 0.26 then
 			return 1
 		end
-		for _, k in ipairs({ -0.3, 0, 0.3 }) do
+		for _, k in ipairs(Geo.PINS) do
 			if math.abs(u - k) <= 0.04 and math.abs(v) > 0.5 and math.abs(v) <= 0.86 then
 				return 1
 			end
@@ -917,9 +932,106 @@ local Shapes = {
 		end
 		return 0
 	end,
+	shield = function(u, v)
+		if Geo.poly(u, v, Geo.SHIELD) <= STROKE then
+			return 1
+		end
+		if Geo.seg(u, v, -0.30, 0.0, -0.08, 0.24) <= 0.07 or Geo.seg(u, v, -0.08, 0.24, 0.32, -0.22) <= 0.07 then
+			return 1
+		end
+		return 0
+	end,
+	lock = function(u, v)
+		local sd = Geo.rbox(u, v, 0, 0.3, 0.56, 0.46, 0.1)
+		if sd <= 0 then
+			if Geo.hyp(u, v - 0.24) <= 0.1 or (math.abs(u) <= 0.04 and v >= 0.24 and v <= 0.5) then
+				return 0
+			end
+			return (sd < -STROKE) and 2 or 1
+		end
+		if v <= -0.1 and math.abs(Geo.hyp(u, v + 0.1) - 0.34) <= 0.065 then
+			return 1
+		end
+		return 0
+	end,
+	bolt = function(u, v)
+		return Geo.inside(u, v, Geo.BOLT) and 1 or 0
+	end,
+	terminal = function(u, v)
+		local sd = Geo.rbox(u, v, 0, 0, 0.9, 0.68, 0.1)
+		if math.abs(sd) <= STROKE then
+			return 1
+		end
+		if sd < 0 and math.abs(v + 0.42) <= 0.04 then
+			return 1
+		end
+		for _, dx in ipairs(Geo.DOTS) do
+			if Geo.hyp(u - dx, v + 0.55) <= 0.055 then
+				return 1
+			end
+		end
+		if Geo.seg(u, v, -0.55, -0.2, -0.25, 0.04) <= 0.06 or Geo.seg(u, v, -0.25, 0.04, -0.55, 0.28) <= 0.06 then
+			return 1
+		end
+		if Geo.seg(u, v, -0.1, 0.34, 0.36, 0.34) <= 0.06 then
+			return 1
+		end
+		return 0
+	end,
+	gear = function(u, v)
+		local r = Geo.hyp(u, v)
+		if math.abs(r - 0.52) <= 0.09 or math.abs(r - 0.2) <= 0.07 then
+			return 1
+		end
+		if r >= 0.58 and r <= 0.86 and math.cos(8 * math.atan2(v, u)) > 0.25 then
+			return 1
+		end
+		return 0
+	end,
+	globe = function(u, v)
+		local r = Geo.hyp(u, v)
+		if math.abs(r - 0.84) <= STROKE then
+			return 1
+		end
+		if r < 0.84 then
+			if math.abs(v) <= 0.045 or math.abs(u) <= 0.045 then
+				return 1
+			end
+			if math.abs(math.abs(v) - 0.44) <= 0.04 then
+				return 1
+			end
+			if math.abs((u / 0.42) ^ 2 + (v / 0.84) ^ 2 - 1) <= 0.22 then
+				return 1
+			end
+		end
+		return 0
+	end,
+	key = function(u, v)
+		if math.abs(Geo.hyp(u + 0.42, v + 0.36) - 0.3) <= 0.07 then
+			return 1
+		end
+		if Geo.seg(u, v, -0.2, -0.14, 0.74, 0.8) <= 0.065 then
+			return 1
+		end
+		if Geo.seg(u, v, 0.5, 0.56, 0.66, 0.4) <= 0.06 or Geo.seg(u, v, 0.34, 0.4, 0.5, 0.24) <= 0.06 then
+			return 1
+		end
+		return 0
+	end,
+	atom = function(u, v)
+		if Geo.hyp(u, v) <= 0.13 then
+			return 1
+		end
+		for _, ang in ipairs(Geo.ATOM) do
+			if math.abs(Geo.ell(u, v, ang, 0.88, 0.32) - 1) <= 0.2 then
+				return 1
+			end
+		end
+		return 0
+	end,
 }
+local SHAPE_NAMES = { "roblox", "lua", "cyber", "code", "hello", "core", "shield", "lock", "bolt", "terminal", "gear", "globe", "key", "atom" }
 
--- Palet tepi layar (loop tertutup, merah > pink > ungu > biru > cyan > merah)
 local EDGE_STOPS = {
 	{ 0.00, Color3.fromRGB(255, 38, 52) },
 	{ 0.14, Color3.fromRGB(255, 60, 120) },
@@ -1027,18 +1139,19 @@ local function buildEdge(parent)
 	end
 
 	local function update(t, strength, minDim)
-		local base = minDim * 0.11 * strength
+		local base = minDim * 0.11 * strength * (0.9 + 0.1 * math.sin(t * 0.8))
+		local ws, cs, cycles = 1.0, 0.10, 2
 		for _, s in ipairs(segments) do
 			local phase = s.u * math.pi * 2
-			local wave = 0.5 + 0.5 * math.sin(phase * 2 - t * 1.2)
-			local wave2 = 0.5 + 0.5 * math.sin(phase * 3 + t * 1.9)
-			local th = base * (0.4 + wave + 0.5 * wave2) * (0.9 + 0.1 * math.sin(t * 0.8))
+			local wave = 0.5 + 0.5 * math.sin(phase * 2 - t * 1.2 * ws)
+			local wave2 = 0.5 + 0.5 * math.sin(phase * 3 + t * 1.9 * ws)
+			local th = base * (0.4 + 1.0 * wave + 0.5 * wave2)
 			if s.horizontal then
 				s.frame.Size = UDim2.fromOffset(s.len, th)
 			else
 				s.frame.Size = UDim2.fromOffset(th, s.len)
 			end
-			local hue = s.u * 2 - t * 0.1
+			local hue = s.u * cycles - t * cs
 			s.frame.BackgroundColor3 = edgeColor(hue):Lerp(edgeColor(hue + 0.16), wave)
 		end
 	end
@@ -1138,7 +1251,7 @@ local function buildLogo(holder, shapeName, accent, secondary, textSize)
 	for y = 1, GRID do
 		for x = 1, GRID do
 			local cx, cy = x - CENTER, y - CENTER
-			local fill = fn(cx / GRID_R, cy / GRID_R)
+			local fill = fn(cx / GRID_R, cy / GRID_R, cx, cy)
 			if fill == 2 and (x + y) % 2 ~= 0 then
 				fill = 0
 			end
@@ -1158,7 +1271,7 @@ local function buildLogo(holder, shapeName, accent, secondary, textSize)
 				}, holder)
 				state.cells[#state.cells + 1] = { label = label, color = color }
 				local delay = ((x + y) / (GRID * 2)) * 0.5 + math.random() * 0.2
-				tweenAfter(label, delay, 0.5, {
+				tweenAfter(label, delay, 0.45 + math.random() * 0.1, {
 					Position = UDim2.fromScale((x - 0.5) / GRID, (y - 0.5) / GRID),
 					TextTransparency = 0,
 				}, Enum.EasingStyle.Quint)
@@ -1166,14 +1279,13 @@ local function buildLogo(holder, shapeName, accent, secondary, textSize)
 		end
 	end
 
-	-- Efek kilap acak pada karakter
 	task.spawn(function()
 		while state.alive and #state.cells > 0 do
-			for _ = 1, 8 do
+			for _ = 1, math.clamp(math.floor(#state.cells / 40), 6, 14) do
 				local c = state.cells[math.random(1, #state.cells)]
 				if c.label.Parent then
 					c.label.Text = CHARS[math.random(1, #CHARS)]
-					c.label.TextColor3 = Color3.new(1, 1, 1)
+					c.label.TextColor3 = Color3.fromRGB(255, 255, 255)
 					tween(c.label, 0.35, { TextColor3 = c.color }, Enum.EasingStyle.Sine)
 				end
 			end
@@ -1192,7 +1304,7 @@ local function dissolveLogo(state)
 	for _, cell in ipairs(state.cells) do
 		local pos = cell.label.Position
 		tweenAfter(cell.label, math.random() * 0.2, 0.5, {
-			Position = UDim2.fromScale(pos.X.Scale + math.random(150, 300) / 100, pos.Y.Scale),
+			Position = UDim2.fromScale(pos.X.Scale + math.random(150, 300) / 100, pos.Y.Scale + math.random(-20, 20) / 100),
 			TextTransparency = 1,
 		}, Enum.EasingStyle.Quad)
 	end
@@ -1205,9 +1317,96 @@ local function dissolveLogo(state)
 	end)
 end
 
--- ============================================================
--- Library utama
--- ============================================================
+local function scanLine(holder, accent)
+	local s = new("Frame", {
+		Size = UDim2.new(1, 0, 0, 2),
+		Position = UDim2.fromScale(0, 0),
+		BackgroundColor3 = accent,
+		BorderSizePixel = 0,
+		ZIndex = 10,
+	}, holder)
+	new("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.5, 0),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	}, s)
+	tween(s, 0.7, { Position = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+	task.delay(0.8, function()
+		s:Destroy()
+	end)
+end
+
+local function flash(gui, color, alpha)
+	local f = new("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = color,
+		BackgroundTransparency = alpha,
+		BorderSizePixel = 0,
+		ZIndex = 4,
+	}, gui)
+	tween(f, 0.45, { BackgroundTransparency = 1 }, Enum.EasingStyle.Sine)
+	task.delay(0.5, function()
+		f:Destroy()
+	end)
+end
+
+local function scrambleText(lbl, text, duration)
+	local chars = {}
+	for _, code in utf8.codes(text) do
+		chars[#chars + 1] = utf8.char(code)
+	end
+	local n = #chars
+	local steps = math.max(n * 2, 16)
+	for i = 1, steps do
+		local shown = math.floor(n * i / steps)
+		local buf = {}
+		for j = 1, n do
+			if j <= shown or chars[j] == " " then
+				buf[j] = chars[j]
+			else
+				buf[j] = SCRAMBLE_CHARS[math.random(1, #SCRAMBLE_CHARS)]
+			end
+		end
+		lbl.Text = table.concat(buf)
+		task.wait(duration / steps)
+	end
+	lbl.Text = text
+end
+
+local function scaleColor(value, stops)
+	if value <= stops[1][1] then
+		return stops[1][2]
+	end
+	for i = 2, #stops do
+		local a, b = stops[i - 1], stops[i]
+		if value <= b[1] then
+			return a[2]:Lerp(b[2], (value - a[1]) / (b[1] - a[1]))
+		end
+	end
+	return stops[#stops][2]
+end
+
+local function tint(text, color)
+	return string.format(
+		'<font color="#%02X%02X%02X">%s</font>',
+		math.floor(color.R * 255 + 0.5),
+		math.floor(color.G * 255 + 0.5),
+		math.floor(color.B * 255 + 0.5),
+		text
+	)
+end
+
+local function escapeRich(text)
+	return (text:gsub("[&<>\"']", {
+		["&"] = "&amp;",
+		["<"] = "&lt;",
+		[">"] = "&gt;",
+		['"'] = "&quot;",
+		["'"] = "&apos;",
+	}))
+end
 
 function KeySystem.new(userOptions)
 	local cfg = {}
@@ -1218,24 +1417,26 @@ function KeySystem.new(userOptions)
 		cfg[k] = v
 	end
 
-	local C = {
-		accent = cfg.Accent,
-		secondary = cfg.Secondary,
-		text = Color3.fromRGB(240, 242, 246),
-		input = Color3.fromRGB(20, 21, 28),
-		card = Color3.fromRGB(22, 24, 32),
-		cardHover = Color3.fromRGB(34, 36, 46),
-		stroke = Color3.fromRGB(46, 49, 60),
-		btn = Color3.fromRGB(30, 32, 40),
-		btnHover = Color3.fromRGB(46, 49, 60),
-		success = cfg.Success,
-		error = cfg.Error,
-	}
-	local DARK = Color3.fromRGB(14, 15, 20)
-	local STATUS_COLORS = { info = C.secondary, loading = C.accent, success = C.success, error = C.error }
+	local ACCENT = cfg.Accent
+	local SECONDARY = cfg.Secondary
+	local SUCCESS = cfg.Success
+	local ERROR = cfg.Error
+	local INPUT_BG = Color3.fromRGB(20, 21, 28)
+	local BTN_BG = Color3.fromRGB(30, 32, 40)
+	local BTN_HOVER = Color3.fromRGB(46, 49, 60)
+	local SUBMIT_TEXT = Color3.fromRGB(14, 15, 20)
+	local PLACEHOLDER = Color3.fromRGB(110, 115, 128)
+	local TRACK_BG = Color3.fromRGB(44, 46, 54)
+	local STATUS_COLORS = { info = SECONDARY, loading = ACCENT, success = SUCCESS, error = ERROR }
 	local STATUS_ICONS = { info = "info", loading = "loader", success = "circle-check", error = "circle-x" }
 
-	-- Penyimpanan key dan statistik
+	local ks = cfg.KeySystem or {}
+	local keyList = ks.Key
+	local services = buildServices(ks.API)
+	if keyList == nil and #services == 0 then
+		warn("[KeySystem] KeySystem.Key atau KeySystem.API belum diisi")
+	end
+
 	local tagName = (tostring(cfg.Title):gsub("[^%w_]", "_"))
 	local keyPath = cfg.Folder .. "/" .. tagName .. "_key.txt"
 	local statsPath = cfg.Folder .. "/" .. tagName .. "_stats.json"
@@ -1261,14 +1462,6 @@ function KeySystem.new(userOptions)
 		if savedKey == "" then
 			savedKey = nil
 		end
-	end
-
-	-- Key system
-	local ks = cfg.KeySystem or {}
-	local keyList = ks.Key
-	local services = buildServices(ks.API)
-	if keyList == nil and #services == 0 then
-		warn("[KeySystem] KeySystem.Key atau KeySystem.API belum diisi")
 	end
 
 	local function validateKey(key)
@@ -1334,7 +1527,6 @@ function KeySystem.new(userOptions)
 		return nil, lastLinkErr
 	end
 
-	-- Ruang layar
 	local host = resolveHost()
 	for _, child in ipairs(host:GetChildren()) do
 		if child.Name == "KeySystemGui" then
@@ -1381,7 +1573,6 @@ function KeySystem.new(userOptions)
 	}, Gui)
 	tween(Dim, 0.8, { BackgroundTransparency = cfg.BackdropTransparency }, Enum.EasingStyle.Sine)
 
-	-- Menangkap semua tap di belakang UI
 	local Blocker = new("TextButton", {
 		Name = "Blocker",
 		Size = UDim2.fromScale(1, 1),
@@ -1407,15 +1598,23 @@ function KeySystem.new(userOptions)
 	end)
 
 	local edge = buildEdge(Gui)
-	local fx = buildFx(Gui, C.accent, C.secondary)
+	local fx = buildFx(Gui, ACCENT, SECONDARY)
 	local edgeVal = Instance.new("NumberValue")
 	edgeVal.Value = 0
 	tween(edgeVal, 1.6, { Value = 1 }, Enum.EasingStyle.Sine)
 	local speedVal = Instance.new("NumberValue")
 	speedVal.Value = 8
-	tween(speedVal, 1.6, { Value = 1.6 }, Enum.EasingStyle.Quad)
+	local speedTween = tween(speedVal, 1.6, { Value = 1.6 }, Enum.EasingStyle.Quad)
+	local function setSpeed(to, time)
+		if speedTween then
+			speedTween:Cancel()
+		end
+		speedTween = tween(speedVal, time, { Value = to }, Enum.EasingStyle.Quad)
+	end
 
-	-- Konten dengan ukuran desain tetap (diskalakan ke layar)
+	local BASE_SCALE = 1
+	local minDim = 720
+	local exiting = false
 	local Content = new("Frame", {
 		Name = "Content",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1426,17 +1625,95 @@ function KeySystem.new(userOptions)
 	}, Gui)
 	local ContentScale = new("UIScale", { Scale = 1 }, Content)
 
-	local minDim = 720
+	local tagScale = new("UIScale", { Scale = 1 }, Gui)
+	local TagHolder = new("Frame", {
+		Name = "Tag",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 0.97),
+		Size = UDim2.fromOffset(0, 18),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		ZIndex = 6,
+	}, Gui)
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, TagHolder)
+	local TagIcon = new("ImageLabel", {
+		Size = UDim2.fromOffset(16, 16),
+		BackgroundTransparency = 1,
+		ImageColor3 = SECONDARY,
+		ImageTransparency = 1,
+		LayoutOrder = 1,
+		ZIndex = 6,
+	}, TagHolder)
+	iconSet(TagIcon, "terminal")
+	local TagLabel = new("TextLabel", {
+		Size = UDim2.fromOffset(0, 16),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		Text = cfg.Title .. "  //  " .. cfg.Subtitle,
+		Font = Enum.Font.Code,
+		TextSize = 13,
+		TextColor3 = SECONDARY,
+		TextTransparency = 1,
+		LayoutOrder = 2,
+		ZIndex = 6,
+	}, TagHolder)
+	tween(TagIcon, 0.8, { ImageTransparency = 0.2 }, Enum.EasingStyle.Sine)
+	tween(TagLabel, 0.8, { TextTransparency = 0.2 }, Enum.EasingStyle.Sine)
+
 	local function applyLayout()
 		local vp = viewport()
 		minDim = math.min(vp.X, vp.Y)
-		ContentScale.Scale = math.clamp(math.min(vp.X * 0.94 / DESIGN_W, vp.Y * 0.86 / DESIGN_H), 0.2, 3)
+		if not exiting then
+			BASE_SCALE = math.clamp(math.min(vp.X * 0.94 / DESIGN_W, vp.Y * 0.86 / DESIGN_H), 0.2, 3)
+			ContentScale.Scale = BASE_SCALE
+		end
+		tagScale.Scale = math.clamp(minDim / 450, 0.75, 2.6)
 		edge.layout(vp.X, vp.Y)
 	end
 	applyLayout()
 	Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyLayout)
 
-	-- Definisi card kolom kiri
+	local function corner(ax, ay)
+		local holder = new("Frame", {
+			AnchorPoint = Vector2.new(ax, ay),
+			Position = UDim2.fromScale(ax, ay),
+			Size = UDim2.fromOffset(18, 18),
+			BackgroundTransparency = 1,
+			ZIndex = 6,
+		}, Content)
+		local h = new("Frame", {
+			AnchorPoint = Vector2.new(ax, ay),
+			Position = UDim2.fromScale(ax, ay),
+			Size = UDim2.new(1, 0, 0, 2),
+			BackgroundColor3 = ACCENT,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ZIndex = 6,
+		}, holder)
+		local v = new("Frame", {
+			AnchorPoint = Vector2.new(ax, ay),
+			Position = UDim2.fromScale(ax, ay),
+			Size = UDim2.new(0, 2, 1, 0),
+			BackgroundColor3 = ACCENT,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ZIndex = 6,
+		}, holder)
+		tween(h, 0.8, { BackgroundTransparency = 0.35 }, Enum.EasingStyle.Sine)
+		tween(v, 0.8, { BackgroundTransparency = 0.35 }, Enum.EasingStyle.Sine)
+	end
+	corner(0, 0)
+	corner(1, 0)
+	corner(0, 1)
+	corner(1, 1)
+
+	local hasCards = false
 	local cardDefs = {}
 	local function addCard(title, subtitle, icon, action)
 		if #cardDefs < MAX_CARDS then
@@ -1444,18 +1721,349 @@ function KeySystem.new(userOptions)
 		end
 	end
 
-	-- Status (didefinisikan dulu supaya bisa dipakai card dan tombol)
-	local statusLabel, statusIcon
+	local U = {}
+
+	local logoSize = 331.2
+	local logoCenter = UDim2.fromOffset(184, 200)
+	local LogoHolder = new("Frame", {
+		Name = "Logo",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = logoCenter,
+		Size = UDim2.fromOffset(logoSize, logoSize),
+		BackgroundTransparency = 1,
+		ZIndex = 6,
+	}, Content)
+
+	U.separator = new("Frame", {
+		Name = "Separator",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(372.6, 200),
+		Size = UDim2.fromOffset(1, 0),
+		BackgroundColor3 = ACCENT,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 6,
+	}, Content)
+	new("UIGradient", {
+		Rotation = 90,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.5, 0),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	}, U.separator)
+
+	local Info = new("Frame", {
+		Name = "Info",
+		Position = UDim2.fromOffset(386.4, 40),
+		Size = UDim2.fromOffset(533.6, 320),
+		BackgroundTransparency = 1,
+		ZIndex = 6,
+	}, Content)
+
+	local function label(parent, props)
+		props.BackgroundTransparency = 1
+		props.BorderSizePixel = 0
+		props.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
+		props.TextYAlignment = Enum.TextYAlignment.Center
+		props.TextColor3 = props.TextColor3 or ACCENT
+		props.TextTruncate = Enum.TextTruncate.AtEnd
+		props.Font = props.Font or Enum.Font.Gotham
+		props.TextSize = props.TextSize or 13
+		props.Text = props.Text or ""
+		props.ZIndex = props.ZIndex or 7
+		return new("TextLabel", props, parent)
+	end
+
+	local function sizedText(lbl, maxSize, minSize)
+		lbl.TextScaled = true
+		new("UITextSizeConstraint", { MaxTextSize = maxSize, MinTextSize = minSize }, lbl)
+		return lbl
+	end
+
+	local avatarHolder = new("Frame", {
+		Name = "AvatarHolder",
+		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.fromOffset(74.7, 74.7),
+		BackgroundTransparency = 1,
+		ZIndex = 7,
+	}, Info)
+	U.avatarImg = new("ImageLabel", {
+		Name = "Avatar",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.84, 0.84),
+		BackgroundColor3 = INPUT_BG,
+		BackgroundTransparency = 1,
+		ImageTransparency = 1,
+		Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=420&h=420",
+		ZIndex = 8,
+	}, avatarHolder)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, U.avatarImg)
+	local ring = new("Frame", {
+		Name = "Ring",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 7,
+	}, avatarHolder)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, ring)
+	U.ringStroke = new("UIStroke", {
+		Color = Color3.fromRGB(255, 255, 255),
+		Thickness = 2.5,
+		Transparency = 1,
+	}, ring)
+	new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, ACCENT),
+			ColorSequenceKeypoint.new(0.5, SECONDARY),
+			ColorSequenceKeypoint.new(1, ACCENT),
+		}),
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.5, 0.85),
+			NumberSequenceKeypoint.new(1, 0),
+		}),
+	}, U.ringStroke)
+	task.spawn(function()
+		pcall(function()
+			ContentProvider:PreloadAsync({ U.avatarImg })
+		end)
+	end)
+
+	U.displayName = sizedText(label(Info, {
+		Position = UDim2.fromOffset(74.7, 0),
+		Size = UDim2.fromOffset(373.5, 38.4),
+		Text = LocalPlayer.DisplayName,
+		Font = Enum.Font.GothamBold,
+		TextColor3 = ACCENT,
+	}), 30, 6)
+	U.userName = sizedText(label(Info, {
+		Position = UDim2.fromOffset(74.7, 38.4),
+		Size = UDim2.fromOffset(373.5, 22.4),
+		Text = "@" .. LocalPlayer.Name,
+		Font = Enum.Font.Gotham,
+		TextColor3 = SECONDARY,
+	}), 18, 5)
+	U.meta = sizedText(label(Info, {
+		Position = UDim2.fromOffset(74.7, 60.8),
+		Size = UDim2.fromOffset(373.5, 17.6),
+		Text = "ID " .. LocalPlayer.UserId .. "  |  AGE " .. LocalPlayer.AccountAge .. "d",
+		Font = Enum.Font.Code,
+		TextColor3 = SECONDARY,
+	}), 13, 4)
+
+	U.greetIcon = new("ImageLabel", {
+		Position = UDim2.fromOffset(0, 96),
+		Size = UDim2.fromOffset(24, 24),
+		BackgroundTransparency = 1,
+		ImageColor3 = ACCENT,
+		ZIndex = 7,
+	}, Info)
+	iconSet(U.greetIcon, "zap")
+	U.greet = sizedText(label(Info, {
+		Position = UDim2.fromOffset(32, 91.2),
+		Size = UDim2.fromOffset(501.6, 30.4),
+		Font = Enum.Font.Code,
+		TextColor3 = ACCENT,
+	}), 22, 5)
+
+	U.analysis = sizedText(label(Info, {
+		Position = UDim2.fromOffset(0, 123.2),
+		Size = UDim2.fromOffset(533.6, 16),
+		Font = Enum.Font.Code,
+		TextColor3 = SECONDARY,
+		RichText = true,
+	}), 12, 4)
+
+	U.inputFrame = new("Frame", {
+		Position = UDim2.fromOffset(0, 147.2),
+		Size = UDim2.fromOffset(533.6, 54.4),
+		BackgroundColor3 = INPUT_BG,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		ZIndex = 7,
+	}, Info)
+	U.inputStroke = rounded(U.inputFrame, 9, SECONDARY, 0.4)
+	U.inputStroke.Thickness = 1.5
+	U.inputLine = new("Frame", {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.new(0, 0, 0, 2),
+		BackgroundColor3 = ACCENT,
+		BorderSizePixel = 0,
+		ZIndex = 10,
+	}, U.inputFrame)
+	U.keyIcon = new("ImageLabel", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromOffset(16, 27.2),
+		Size = UDim2.fromOffset(27, 27),
+		BackgroundTransparency = 1,
+		ImageColor3 = SECONDARY,
+		ZIndex = 9,
+	}, U.inputFrame)
+	iconSet(U.keyIcon, "key-round")
+	U.keyBox = new("TextBox", {
+		Name = "KeyBox",
+		Position = UDim2.fromOffset(69.4, 5.4),
+		Size = UDim2.fromOffset(448.2, 43.5),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Text = "",
+		PlaceholderText = "Enter your key",
+		PlaceholderColor3 = PLACEHOLDER,
+		ClearTextOnFocus = false,
+		MultiLine = false,
+		TextScaled = true,
+		TextColor3 = ACCENT,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Font = Enum.Font.Code,
+		ClipsDescendants = true,
+		ZIndex = 9,
+	}, U.inputFrame)
+	new("UITextSizeConstraint", { MaxTextSize = 16, MinTextSize = 7 }, U.keyBox)
+
+	local function makeButton(name, text, iconName, x, bg, fg)
+		local btn = new("TextButton", {
+			Name = name,
+			Position = UDim2.fromOffset(x, 217.6),
+			Size = UDim2.fromOffset(258.8, 51.2),
+			BackgroundColor3 = bg,
+			BackgroundTransparency = 0.05,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			Text = "",
+			ClipsDescendants = true,
+			ZIndex = 8,
+		}, Info)
+		rounded(btn, 9)
+		local scale = new("UIScale", { Scale = 1 }, btn)
+		local stroke = new("UIStroke", {
+			Color = ACCENT,
+			Thickness = 1.5,
+			Transparency = 0.35,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}, btn)
+		local icon = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromOffset(18, 25.6),
+			Size = UDim2.fromOffset(26, 26),
+			BackgroundTransparency = 1,
+			ImageColor3 = fg,
+			ZIndex = 9,
+		}, btn)
+		iconSet(icon, iconName)
+		local lbl = sizedText(label(btn, {
+			Position = UDim2.fromOffset(67.3, 10.2),
+			Size = UDim2.fromOffset(176, 30.7),
+			Text = text,
+			Font = Enum.Font.GothamBold,
+			TextColor3 = fg,
+			ZIndex = 9,
+		}), 16, 5)
+		return { button = btn, label = lbl, icon = icon, stroke = stroke, scale = scale, bg = bg, fg = fg }
+	end
+
+	local getKey = makeButton("GetKey", "Get Key", "link", 0, BTN_BG, ACCENT)
+	local verify = makeButton("Verify", "Verify", "shield-check", 274.8, ACCENT, SUBMIT_TEXT)
+	U.getKey = getKey
+	U.verify = verify
+
+	U.getKeyGradient = new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, SECONDARY),
+			ColorSequenceKeypoint.new(0.5, ACCENT),
+			ColorSequenceKeypoint.new(1, SECONDARY),
+		}),
+	}, getKey.stroke)
+
+	U.statusIcon = new("ImageLabel", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromOffset(0, 289.6),
+		Size = UDim2.fromOffset(21, 21),
+		BackgroundTransparency = 1,
+		ImageColor3 = SECONDARY,
+		ZIndex = 7,
+	}, Info)
+	U.status = sizedText(label(Info, {
+		Position = UDim2.fromOffset(29.3, 276.8),
+		Size = UDim2.fromOffset(352, 24),
+		Font = Enum.Font.Code,
+		TextColor3 = SECONDARY,
+	}), 14, 4)
+	U.percent = sizedText(label(Info, {
+		Position = UDim2.fromOffset(400.2, 276.8),
+		Size = UDim2.fromOffset(133.4, 24),
+		Text = "",
+		Font = Enum.Font.Code,
+		TextColor3 = ACCENT,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}), 14, 4)
+
+	U.track = new("Frame", {
+		Position = UDim2.fromOffset(0, 305.6),
+		Size = UDim2.fromOffset(533.6, 9.6),
+		BackgroundColor3 = TRACK_BG,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 7,
+	}, Info)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, U.track)
+	U.fill = new("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = ACCENT,
+		BorderSizePixel = 0,
+		ZIndex = 8,
+	}, U.track)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, U.fill)
+	new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, SECONDARY),
+			ColorSequenceKeypoint.new(1, ACCENT),
+		}),
+	}, U.fill)
+
+	U.closeBtn = new("TextButton", {
+		Name = "Close",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromOffset(897, 16),
+		Size = UDim2.fromOffset(46, 46),
+		BackgroundColor3 = BTN_BG,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		Text = "",
+		ZIndex = 8,
+	}, Content)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, U.closeBtn)
+	U.closeStroke = new("UIStroke", {
+		Color = SECONDARY,
+		Thickness = 1.2,
+		Transparency = 0.5,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	}, U.closeBtn)
+	new("UIPadding", {
+		PaddingTop = UDim.new(0.18, 0),
+		PaddingBottom = UDim.new(0.18, 0),
+		PaddingLeft = UDim.new(0.18, 0),
+		PaddingRight = UDim.new(0.18, 0),
+	}, U.closeBtn)
+	U.closeIcon = new("ImageLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ImageColor3 = SECONDARY,
+		ZIndex = 9,
+	}, U.closeBtn)
+	iconSet(U.closeIcon, "x")
+
 	local statusKind = "info"
 	local function setStatus(text, kind)
 		kind = kind or "info"
 		statusKind = kind
-		if statusLabel then
-			statusLabel.Text = text
-			statusLabel.TextColor3 = STATUS_COLORS[kind] or C.secondary
-			statusIcon.ImageColor3 = STATUS_COLORS[kind] or C.secondary
-			iconSet(statusIcon, STATUS_ICONS[kind] or "info")
-		end
+		U.status.Text = tostring(text)
+		U.status.TextColor3 = STATUS_COLORS[kind] or SECONDARY
+		U.statusIcon.ImageColor3 = STATUS_COLORS[kind] or SECONDARY
+		iconSet(U.statusIcon, STATUS_ICONS[kind] or "info")
 	end
 
 	local function copyLink(url, what)
@@ -1495,7 +2103,7 @@ function KeySystem.new(userOptions)
 		for _, c in ipairs(cfg.Cards) do
 			addCard(tostring(c.Title or "Card"), tostring(c.Subtitle or ""), c.Icon or "link", function()
 				if c.Url then
-					copyLink(normalizeUrl(c.Url), c.Title or "Link")
+					copyLink(normalizeUrl(c.Url), tostring(c.Title or "Link"))
 				end
 				if type(c.OnClick) == "function" then
 					c.OnClick()
@@ -1503,312 +2111,80 @@ function KeySystem.new(userOptions)
 			end)
 		end
 	end
-	local hasCards = #cardDefs > 0
+	hasCards = #cardDefs > 0
 
-	-- Logo kolom kiri (ukurannya menyesuaikan saat ada card)
-	local logoSize = hasCards and 170 or 240
-	local LogoHolder = new("Frame", {
-		Name = "Logo",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = hasCards and UDim2.fromOffset(LEFT_W / 2, 100) or UDim2.fromOffset(LEFT_W / 2, 200),
-		Size = UDim2.fromOffset(logoSize, logoSize),
-		BackgroundTransparency = 1,
-		ZIndex = 6,
-	}, Content)
-
-	if cfg.Logo then
-		local img = new("ImageLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.6, 0.6),
-			BackgroundTransparency = 1,
-			Image = tostring(cfg.Logo):match("^%d+$") and ("rbxassetid://" .. cfg.Logo) or tostring(cfg.Logo),
-			ImageColor3 = C.accent,
-			ScaleType = Enum.ScaleType.Fit,
-			ZIndex = 6,
-		}, LogoHolder)
-		img.Name = "LogoImage"
-	end
-
-	-- Panel isi (fade in saat siap). Berisi divider, info, card, dan tombol tutup.
-	local Panel = new("CanvasGroup", {
-		Name = "Panel",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		GroupTransparency = 1,
-		BorderSizePixel = 0,
-		ZIndex = 6,
-	}, Content)
-
-	local Divider = new("Frame", {
-		Name = "Divider",
-		Position = UDim2.fromOffset(LEFT_W, 40),
-		Size = UDim2.fromOffset(1, 320),
-		BackgroundColor3 = C.accent,
-		BackgroundTransparency = 0.5,
-		BorderSizePixel = 0,
-		ZIndex = 6,
-	}, Panel)
-	new("UIGradient", {
-		Rotation = 90,
-		Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 1),
-			NumberSequenceKeypoint.new(0.5, 0),
-			NumberSequenceKeypoint.new(1, 1),
-		}),
-	}, Divider)
-
-	local Info = new("Frame", {
-		Name = "Info",
-		Position = UDim2.fromOffset(390, 40),
-		Size = UDim2.fromOffset(500, 340),
-		BackgroundTransparency = 1,
-		ZIndex = 6,
-	}, Panel)
-
-	local function label(parent, props)
-		props.BackgroundTransparency = 1
-		props.BorderSizePixel = 0
-		props.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
-		props.TextYAlignment = Enum.TextYAlignment.Center
-		props.TextColor3 = props.TextColor3 or C.text
-		props.TextTruncate = Enum.TextTruncate.AtEnd
-		props.Font = props.Font or Enum.Font.Gotham
-		props.TextSize = props.TextSize or 13
-		props.Text = props.Text or ""
-		props.ZIndex = props.ZIndex or 7
-		return new("TextLabel", props, parent)
-	end
-
-	-- Avatar dan profil
-	local avatar = new("ImageLabel", {
-		Position = UDim2.fromOffset(0, 0),
-		Size = UDim2.fromOffset(72, 72),
-		BackgroundColor3 = C.input,
-		BorderSizePixel = 0,
-		Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150",
-		ScaleType = Enum.ScaleType.Crop,
-		ZIndex = 7,
-	}, Info)
-	rounded(avatar, 36, C.stroke, 0.3)
-
-	label(Info, {
-		Position = UDim2.fromOffset(88, 4),
-		Size = UDim2.fromOffset(400, 30),
-		Text = LocalPlayer.DisplayName,
-		TextSize = 24,
-		Font = Enum.Font.GothamBold,
-	})
-	label(Info, {
-		Position = UDim2.fromOffset(88, 36),
-		Size = UDim2.fromOffset(400, 18),
-		Text = "@" .. LocalPlayer.Name,
-		TextSize = 15,
-		TextColor3 = C.secondary,
-	})
-	label(Info, {
-		Position = UDim2.fromOffset(88, 56),
-		Size = UDim2.fromOffset(400, 16),
-		Text = "ID " .. LocalPlayer.UserId .. "  |  AGE " .. LocalPlayer.AccountAge .. "d",
-		TextSize = 13,
-		TextColor3 = C.secondary,
-		Font = Enum.Font.Code,
-	})
-
-	-- Sapaan
-	local greetIcon = new("ImageLabel", {
-		Position = UDim2.fromOffset(0, 102),
-		Size = UDim2.fromOffset(18, 18),
-		BackgroundTransparency = 1,
-		ImageColor3 = C.accent,
-		ZIndex = 7,
-	}, Info)
-	iconSet(greetIcon, "zap")
-	local greetLabel = label(Info, {
-		Position = UDim2.fromOffset(28, 98),
-		Size = UDim2.fromOffset(472, 26),
-		TextSize = 20,
-		Font = Enum.Font.Code,
-		TextColor3 = C.accent,
-	})
-
-	local analysisLabel = label(Info, {
-		Position = UDim2.fromOffset(0, 132),
-		Size = UDim2.fromOffset(500, 16),
-		TextSize = 12,
-		TextColor3 = C.secondary,
-		Font = Enum.Font.Code,
-	})
-
-	-- Kotak key
-	local inputFrame = new("Frame", {
-		Position = UDim2.fromOffset(0, 160),
-		Size = UDim2.fromOffset(500, 58),
-		BackgroundColor3 = C.input,
-		BackgroundTransparency = 0.1,
-		BorderSizePixel = 0,
-		ClipsDescendants = true,
-		ZIndex = 7,
-	}, Info)
-	rounded(inputFrame, 9, C.secondary, 0.4)
-	local inputStroke = inputFrame:FindFirstChildOfClass("UIStroke")
-	local keyIcon = new("ImageLabel", {
-		Position = UDim2.fromOffset(14, 21),
-		Size = UDim2.fromOffset(16, 16),
-		BackgroundTransparency = 1,
-		ImageColor3 = C.secondary,
-		ZIndex = 8,
-	}, inputFrame)
-	iconSet(keyIcon, "key-round")
-
-	local keyBox = new("TextBox", {
-		Position = UDim2.fromOffset(44, 0),
-		Size = UDim2.fromOffset(440, 58),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Text = "",
-		PlaceholderText = "Enter your key",
-		PlaceholderColor3 = Color3.fromRGB(110, 115, 128),
-		ClearTextOnFocus = false,
-		MultiLine = false,
-		TextSize = 16,
-		TextColor3 = C.accent,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		Font = Enum.Font.Code,
-		ClipsDescendants = true,
-		ZIndex = 8,
-	}, inputFrame)
-
-	-- Tombol Get Key dan Verify
-	local getKeyBtn = new("TextButton", {
-		Position = UDim2.fromOffset(0, 236),
-		Size = UDim2.fromOffset(244, 50),
-		BackgroundColor3 = C.btn,
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
-		Text = "Get Key",
-		TextSize = 15,
-		TextColor3 = C.text,
-		Font = Enum.Font.GothamBold,
-		ZIndex = 7,
-	}, Info)
-	rounded(getKeyBtn, 9, C.stroke, 0.2)
-
-	local verifyBtn = new("TextButton", {
-		Position = UDim2.fromOffset(256, 236),
-		Size = UDim2.fromOffset(244, 50),
-		BackgroundColor3 = C.accent,
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
-		Text = "Verify",
-		TextSize = 15,
-		TextColor3 = DARK,
-		Font = Enum.Font.GothamBold,
-		ZIndex = 7,
-	}, Info)
-	rounded(verifyBtn, 9)
-
-	-- Status dan progress
-	statusIcon = new("ImageLabel", {
-		Position = UDim2.fromOffset(0, 308),
-		Size = UDim2.fromOffset(16, 16),
-		BackgroundTransparency = 1,
-		ImageColor3 = C.secondary,
-		ZIndex = 7,
-	}, Info)
-	statusLabel = label(Info, {
-		Position = UDim2.fromOffset(24, 305),
-		Size = UDim2.fromOffset(476, 22),
-		TextSize = 13,
-		TextColor3 = C.secondary,
-		Font = Enum.Font.Code,
-	})
-	setStatus("Connecting...", "loading")
-
-	local track = new("Frame", {
-		Position = UDim2.fromOffset(0, 336),
-		Size = UDim2.fromOffset(500, 4),
-		BackgroundColor3 = C.stroke,
-		BorderSizePixel = 0,
-		ZIndex = 7,
-	}, Info)
-	rounded(track, 2)
-	local fill = new("Frame", {
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = C.accent,
-		BorderSizePixel = 0,
-		ZIndex = 8,
-	}, track)
-	rounded(fill, 2)
-
-	-- Tombol tutup
-	local closeBtn = new("TextButton", {
-		Name = "Close",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromOffset(DESIGN_W - 16, 14),
-		Size = UDim2.fromOffset(30, 30),
-		BackgroundColor3 = C.btn,
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
-		Text = "",
-		ZIndex = 8,
-	}, Panel)
-	rounded(closeBtn, 8)
-	local closeIcon = new("ImageLabel", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(14, 14),
-		BackgroundTransparency = 1,
-		ImageColor3 = C.secondary,
-		ZIndex = 9,
-	}, closeBtn)
-	iconSet(closeIcon, "x")
-
-	-- Card kolom kiri
+	local cardsFrame = {}
 	for i, def in ipairs(cardDefs) do
-		local y = CARD_Y0 + (i - 1) * (CARD_H + CARD_GAP)
+		local col = (i - 1) % 2
+		local row = math.floor((i - 1) / 2)
 		local btn = new("TextButton", {
 			Name = "Card",
-			Position = UDim2.fromOffset(CARD_X, y),
-			Size = UDim2.fromOffset(CARD_W, CARD_H),
-			BackgroundColor3 = C.card,
+			Position = UDim2.fromOffset(col == 0 and 24 or 192, 222 + row * 58),
+			Size = UDim2.fromOffset(156, 50),
+			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+			BackgroundTransparency = 0.9,
 			BorderSizePixel = 0,
 			AutoButtonColor = false,
 			Text = "",
 			ZIndex = 7,
-		}, Panel)
-		rounded(btn, 8, C.stroke, 0.2)
-		local ic = new("ImageLabel", {
+		}, Content)
+		new("UICorner", { CornerRadius = UDim.new(0, 10) }, btn)
+		local cardStroke = new("UIStroke", {
+			Color = Color3.fromRGB(255, 255, 255),
+			Thickness = 1,
+			Transparency = 0.72,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}, btn)
+		new("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)),
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.7),
+				NumberSequenceKeypoint.new(1, 0.95),
+			}),
+		}, btn)
+		local badge = new("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 12, 0.5, 0),
-			Size = UDim2.fromOffset(16, 16),
-			BackgroundTransparency = 1,
-			ImageColor3 = C.accent,
+			Position = UDim2.new(0, 8, 0.5, 0),
+			Size = UDim2.fromOffset(34, 34),
+			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+			BackgroundTransparency = 0.85,
+			BorderSizePixel = 0,
 			ZIndex = 8,
 		}, btn)
+		new("UICorner", { CornerRadius = UDim.new(1, 0) }, badge)
+		local ic = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(16, 16),
+			BackgroundTransparency = 1,
+			ImageColor3 = ACCENT,
+			ZIndex = 9,
+		}, badge)
 		iconSet(ic, def.icon)
 		label(btn, {
-			Position = UDim2.fromOffset(38, 5),
-			Size = UDim2.new(1, -46, 0, 18),
+			Position = UDim2.fromOffset(50, 8),
+			Size = UDim2.new(1, -58, 0, 18),
 			Text = def.title,
-			TextSize = 13,
+			TextSize = 14,
 			Font = Enum.Font.GothamBold,
 			ZIndex = 8,
 		})
 		label(btn, {
-			Position = UDim2.fromOffset(38, 22),
-			Size = UDim2.new(1, -46, 0, 14),
+			Position = UDim2.fromOffset(50, 26),
+			Size = UDim2.new(1, -58, 0, 14),
 			Text = def.subtitle,
 			TextSize = 11,
-			TextColor3 = C.secondary,
+			TextColor3 = SECONDARY,
 			ZIndex = 8,
 		})
 		btn.MouseEnter:Connect(function()
-			tween(btn, 0.15, { BackgroundColor3 = C.cardHover })
+			tween(btn, 0.15, { BackgroundTransparency = 0.8 })
+			tween(cardStroke, 0.15, { Transparency = 0.5 })
 		end)
 		btn.MouseLeave:Connect(function()
-			tween(btn, 0.15, { BackgroundColor3 = C.card })
+			tween(btn, 0.15, { BackgroundTransparency = 0.9 })
+			tween(cardStroke, 0.15, { Transparency = 0.72 })
 		end)
 		btn.MouseButton1Click:Connect(function()
 			task.spawn(function()
@@ -1818,84 +2194,103 @@ function KeySystem.new(userOptions)
 				end
 			end)
 		end)
+		cardsFrame[#cardsFrame + 1] = btn
 	end
 
-	-- ============================================================
-	-- Logika key
-	-- ============================================================
+	local logoTextSize = hasCards and 4 or 8
+	if hasCards then
+		logoSize = 170
+		LogoHolder.Size = UDim2.fromOffset(logoSize, logoSize)
+		LogoHolder.Position = UDim2.fromOffset(184, 105)
+	end
+
+	if cfg.Logo then
+		local img = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(0.6, 0.6),
+			BackgroundTransparency = 1,
+			Image = tostring(cfg.Logo):match("^%d+$") and ("rbxassetid://" .. cfg.Logo) or tostring(cfg.Logo),
+			ImageColor3 = ACCENT,
+			ScaleType = Enum.ScaleType.Fit,
+			ZIndex = 6,
+		}, LogoHolder)
+		img.Name = "LogoImage"
+	end
+
+	local profileItems = {}
+	local keyItems = {}
+	local function collect(list, inst)
+		for _, it in ipairs(snapshot(inst)) do
+			list[#list + 1] = it
+		end
+	end
+	collect(profileItems, U.displayName)
+	collect(profileItems, U.userName)
+	collect(profileItems, U.meta)
+	collect(profileItems, U.greetIcon)
+	collect(profileItems, U.greet)
+	collect(profileItems, U.analysis)
+	collect(keyItems, U.inputFrame)
+	collect(keyItems, getKey.button)
+	collect(keyItems, verify.button)
+	collect(keyItems, U.statusIcon)
+	collect(keyItems, U.status)
+	collect(keyItems, U.percent)
+	collect(keyItems, U.track)
+	collect(keyItems, U.closeBtn)
+	for _, btn in ipairs(cardsFrame) do
+		collect(keyItems, btn)
+	end
+	apply(profileItems, 0)
+	apply(keyItems, 0)
+	U.separator.Size = UDim2.fromOffset(1, 0)
 
 	local ready = false
 	local busy = false
 	local finished = false
 	local destroyed = false
 	local running = true
-	local spinning = false
-	local stepConn = nil
-	local logoTextSize = math.max(4, math.floor(logoSize / GRID + 0.5))
+	local checking = false
+	local verifyProgress = false
+	local phase = "intro"
 	local order = shuffled(SHAPE_NAMES)
 	local destroy
-	local closeGui
 	local api = { Gui = Gui, Closed = false, Key = nil }
+	local attempt, onFail, onSuccess, shutdown
 
-	local function fadeOutAndDestroy(afterFn)
-		tween(Panel, 0.35, { GroupTransparency = 1 }, Enum.EasingStyle.Sine)
-		tween(Dim, 0.5, { BackgroundTransparency = 1 }, Enum.EasingStyle.Sine)
-		tween(Blur, 0.5, { Size = 0 }, Enum.EasingStyle.Sine)
-		task.delay(0.55, function()
-			destroy()
-			if afterFn then
-				afterFn()
-			end
-		end)
+	local function revealProfile()
+		tween(U.separator, 0.7, { Size = UDim2.fromOffset(1, 288) }, Enum.EasingStyle.Quint)
+		tween(U.separator, 0.7, { BackgroundTransparency = 0.5 }, Enum.EasingStyle.Quint)
+		apply(profileItems, 1, 0.5)
+		tween(U.displayName, 0.4, { Position = UDim2.fromOffset(90.7, 0) }, Enum.EasingStyle.Quint)
+		tween(U.userName, 0.4, { Position = UDim2.fromOffset(90.7, 38.4) }, Enum.EasingStyle.Quint)
+		tween(U.meta, 0.4, { Position = UDim2.fromOffset(90.7, 60.8) }, Enum.EasingStyle.Quint)
+		tween(U.ringStroke, 0.5, { Transparency = 0 }, Enum.EasingStyle.Sine)
+		tween(U.avatarImg, 0.5, { ImageTransparency = 0, BackgroundTransparency = 0 }, Enum.EasingStyle.Sine)
+		task.spawn(scrambleText, U.displayName, LocalPlayer.DisplayName, 0.6)
 	end
 
-	local function runCallback(key)
-		local cb = cfg.Callback
-		if type(cb) == "function" then
-			local ok, err = pcall(cb, key)
-			if not ok then
-				warn("[KeySystem] Callback error: " .. tostring(err))
-			end
+	local function revealKey()
+		if phase == "key" or finished then
+			return
 		end
-	end
-
-	local function onSuccess(key)
-		finished = true
-		api.Key = key
-		stats.valid += 1
-		stats.last = os.time()
-		saveStats()
-		if cfg.SaveKey then
-			writeFileSafe(cfg.Folder, keyPath, key)
-		end
-		spinning = false
-		verifyBtn.Text = "Verified"
-		verifyBtn.BackgroundColor3 = C.success
-		tween(fill, 0.35, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Quad)
-		setStatus("Access granted", "success")
-		fadeOutAndDestroy(function()
-			runCallback(key)
-		end)
-	end
-
-	local function onFail(msg)
-		busy = false
-		spinning = false
-		verifyBtn.Text = "Verify"
-		tween(fill, 0.3, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Quad)
-		setStatus(msg, "error")
-		if inputStroke then
-			inputStroke.Color = C.error
-			inputStroke.Transparency = 0
-			task.delay(1.4, function()
-				if inputStroke.Parent then
-					tween(inputStroke, 0.4, { Color = C.secondary, Transparency = 0.4 }, Enum.EasingStyle.Sine)
-				end
+		phase = "key"
+		apply(keyItems, 1, 0.45)
+		loopTween(verify.stroke, 1.2, { Thickness = 3.2, Transparency = 0.7 }, Enum.EasingStyle.Sine, true)
+		ready = true
+		if savedKey then
+			setStatus("Saved key found. Checking...", "info")
+			U.keyBox.Text = savedKey
+			task.delay(0.5, function()
+				attempt(savedKey, true)
 			end)
+		else
+			setStatus("Enter your key to continue", "info")
 		end
 	end
 
-	local function attempt(rawKey, isSaved)
+	function attempt(rawKey, isSaved)
 		if not ready or busy or finished then
 			return
 		end
@@ -1904,56 +2299,204 @@ function KeySystem.new(userOptions)
 			setStatus("Enter your key first", "error")
 			return
 		end
-		if #key > 256 then
+		if #key > 128 then
 			setStatus("That key looks too long", "error")
 			return
 		end
 		busy = true
-		spinning = true
-		verifyBtn.Text = "Checking..."
+		checking = true
+		verifyProgress = true
 		setStatus("Verifying key...", "loading")
-		tween(fill, 3.2, { Size = UDim2.fromScale(0.88, 1) }, Enum.EasingStyle.Quad)
-
+		verify.label.Text = "Checking"
+		tween(U.fill, 3.2, { Size = UDim2.fromScale(0.88, 1) }, Enum.EasingStyle.Quad)
+		task.spawn(function()
+			local n = 0
+			while checking do
+				n = n % 3 + 1
+				verify.label.Text = "Checking" .. string.rep(".", n)
+				task.wait(0.3)
+			end
+		end)
 		task.spawn(function()
 			local started = os.clock()
 			local ok, valid, reason = pcall(validateKey, key)
-			local remain = (isSaved and 0.3 or 1) - (os.clock() - started)
+			local remain = (isSaved and 0.15 or 1) - (os.clock() - started)
 			if remain > 0 then
 				task.wait(remain)
 			end
 			if ok and valid == true then
+				checking = false
+				verifyProgress = false
 				onSuccess(key)
 			else
+				checking = false
+				verifyProgress = false
+				if ok and reason and tostring(reason):lower():find("expir") then
+					stats.expired += 1
+					saveStats()
+				end
+				local msg
 				if not ok then
-					onFail("Something went wrong, try again.")
+					msg = "Something went wrong, try again."
 				else
-					if reason and tostring(reason):lower():find("expir") then
-						stats.expired += 1
-						saveStats()
-					end
-					onFail(reason and tostring(reason):sub(1, 80) or "Invalid or expired key")
+					msg = reason and tostring(reason):sub(1, 80) or "Invalid or expired key"
+				end
+				onFail(msg)
+			end
+		end)
+	end
+
+	function onFail(msg)
+		busy = false
+		verify.label.Text = "Verify"
+		verify.icon.Rotation = 0
+		U.percent.Text = ""
+		tween(U.fill, 0.4, { Size = UDim2.fromScale(0, 1) }, Enum.EasingStyle.Quad)
+		setStatus(msg, "error")
+		if U.inputStroke then
+			tween(U.inputStroke, 0.2, { Color = ERROR, Transparency = 0 }, Enum.EasingStyle.Sine)
+			task.delay(1.4, function()
+				if U.inputStroke.Parent then
+					tween(U.inputStroke, 0.4, { Color = SECONDARY, Transparency = 0.4 }, Enum.EasingStyle.Sine)
+				end
+			end)
+		end
+	end
+
+	function onSuccess(key)
+		finished = true
+		api.Key = key
+		stats.valid += 1
+		stats.last = os.time()
+		saveStats()
+		if cfg.SaveKey then
+			writeFileSafe(cfg.Folder, keyPath, key)
+		end
+		verify.label.Text = "Verified"
+		tween(verify.button, 0.3, { BackgroundColor3 = SUCCESS }, Enum.EasingStyle.Sine)
+		tween(verify.label, 0.25, { TextColor3 = SUBMIT_TEXT }, Enum.EasingStyle.Sine)
+		tween(U.fill, 0.35, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Quad)
+		if U.inputStroke then
+			tween(U.inputStroke, 0.3, { Color = SUCCESS, Transparency = 0 }, Enum.EasingStyle.Sine)
+		end
+		setStatus("Access granted", "success")
+		flash(Gui, ACCENT, 0.78)
+		setSpeed(7, 1.2)
+		tween(edgeVal, 0.5, { Value = 2.2 }, Enum.EasingStyle.Quad)
+		task.wait(1.1)
+		shutdown(true, function()
+			local cb = cfg.Callback
+			if type(cb) == "function" then
+				local ok, err = pcall(cb, key)
+				if not ok then
+					warn("[KeySystem] Callback error: " .. tostring(err))
 				end
 			end
 		end)
 	end
 
-	-- Vibrate hanya 1 kali setiap tap di area kosong
-	Blocker.MouseButton1Down:Connect(function()
-		if cfg.Vibrate and not finished then
-			task.spawn(vibrateOnce)
+	local function sweepOut()
+		exiting = true
+		local vp = viewport()
+		local W, H = vp.X, vp.Y
+		local Clip = new("Frame", {
+			Name = "WipeClip",
+			Size = UDim2.fromOffset(W, H),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			ZIndex = 2,
+		}, Gui)
+		local Inner = new("Frame", {
+			Name = "WipeInner",
+			Size = UDim2.fromOffset(W, H),
+			BackgroundTransparency = 1,
+		}, Clip)
+		for _, child in ipairs(Gui:GetChildren()) do
+			if child ~= Blocker and child ~= Clip and child:IsA("GuiObject") then
+				child.Parent = Inner
+			end
 		end
-	end)
-
-	verifyBtn.MouseButton1Click:Connect(function()
-		attempt(keyBox.Text)
-	end)
-	keyBox.FocusLost:Connect(function(enterPressed)
-		if enterPressed then
-			attempt(keyBox.Text)
+		local glowW = math.max(48, math.floor(minDim * 0.35))
+		local Sweep = new("Frame", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.fromOffset(0, 0),
+			Size = UDim2.new(0, glowW, 1, 0),
+			BackgroundTransparency = 1,
+			ZIndex = 50,
+		}, Gui)
+		local Trail = new("Frame", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(200, 130, 255),
+			BorderSizePixel = 0,
+			ZIndex = 50,
+		}, Sweep)
+		new("UIGradient", {
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(0.6, 0.8),
+				NumberSequenceKeypoint.new(1, 0.3),
+			}),
+		}, Trail)
+		local coreColors = {}
+		for _, stop in ipairs(EDGE_STOPS) do
+			coreColors[#coreColors + 1] = ColorSequenceKeypoint.new(stop[1], stop[2])
 		end
-	end)
+		local Core = new("Frame", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.fromScale(1, 0),
+			Size = UDim2.new(0, 3, 1, 0),
+			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+			BorderSizePixel = 0,
+			ZIndex = 51,
+		}, Sweep)
+		new("UIGradient", { Color = ColorSequence.new(coreColors), Rotation = 90 }, Core)
 
-	getKeyBtn.MouseButton1Click:Connect(function()
+		setSpeed(10, 1.2)
+		local info = TweenInfo.new(0.85, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+		TweenService:Create(Clip, info, { Position = UDim2.fromOffset(W, 0), Size = UDim2.fromOffset(0, H) }):Play()
+		TweenService:Create(Inner, info, { Position = UDim2.fromOffset(-W, 0) }):Play()
+		TweenService:Create(Sweep, info, { Position = UDim2.fromOffset(W, 0) }):Play()
+		tween(Blur, 0.85, { Size = 0 }, Enum.EasingStyle.Linear)
+		task.wait(0.85)
+		tween(Sweep, 0.25, { Position = UDim2.fromOffset(W + glowW, 0) }, Enum.EasingStyle.Linear)
+		task.wait(0.3)
+	end
+
+	function shutdown(success, afterFn)
+		if destroyed then
+			return
+		end
+		exiting = true
+		running = false
+		setSpeed(success and 9 or 5, 1.0)
+		flash(Gui, ACCENT, success and 0.8 or 0.92)
+		apply(profileItems, 0, 0.5)
+		apply(keyItems, 0, 0.5)
+		tween(ContentScale, 0.7, { Scale = BASE_SCALE * (success and 1.12 or 0.92) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		tween(edgeVal, 0.8, { Value = 0 }, Enum.EasingStyle.Sine)
+		task.wait(0.4)
+		tween(Dim, 0.7, { BackgroundTransparency = 1 }, Enum.EasingStyle.Sine)
+		tween(Blur, 0.7, { Size = 0 }, Enum.EasingStyle.Sine)
+		task.wait(0.9)
+		destroy()
+		if afterFn then
+			afterFn()
+		end
+	end
+
+	local function closeGui()
+		if finished or destroyed then
+			return
+		end
+		finished = true
+		running = false
+		task.spawn(function()
+			sweepOut()
+			destroy()
+		end)
+	end
+
+	getKey.button.MouseButton1Click:Connect(function()
 		if not ready or finished then
 			return
 		end
@@ -1966,35 +2509,83 @@ function KeySystem.new(userOptions)
 			end
 		end)
 	end)
+	verify.button.MouseButton1Click:Connect(function()
+		attempt(U.keyBox.Text)
+	end)
+	U.keyBox.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			attempt(U.keyBox.Text)
+		end
+	end)
+	U.keyBox.Focused:Connect(function()
+		if busy then
+			return
+		end
+		tween(U.inputStroke, 0.2, { Color = ACCENT, Transparency = 0 }, Enum.EasingStyle.Sine)
+		tween(U.inputLine, 0.5, { Size = UDim2.new(1, 0, 0, 2) }, Enum.EasingStyle.Quint)
+		tween(U.keyIcon, 0.3, { Rotation = 25, ImageColor3 = ACCENT }, Enum.EasingStyle.Back)
+	end)
+	U.keyBox.FocusLost:Connect(function()
+		if not busy then
+			tween(U.inputStroke, 0.2, { Color = SECONDARY, Transparency = 0.4 }, Enum.EasingStyle.Sine)
+		end
+		tween(U.inputLine, 0.3, { Size = UDim2.new(0, 0, 0, 2) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		tween(U.keyIcon, 0.3, { Rotation = 0, ImageColor3 = SECONDARY }, Enum.EasingStyle.Back)
+	end)
 
-	closeBtn.MouseButton1Click:Connect(function()
+	local function hoverFeel(b, hoverBg)
+		local btn = b.button
+		btn.MouseEnter:Connect(function()
+			tween(btn, 0.15, { BackgroundColor3 = hoverBg }, Enum.EasingStyle.Sine)
+			tween(b.scale, 0.2, { Scale = 1.04 }, Enum.EasingStyle.Back)
+			tween(b.stroke, 0.2, { Transparency = 0 }, Enum.EasingStyle.Sine)
+		end)
+		btn.MouseLeave:Connect(function()
+			tween(btn, 0.15, { BackgroundColor3 = b.bg }, Enum.EasingStyle.Sine)
+			tween(b.scale, 0.2, { Scale = 1 }, Enum.EasingStyle.Sine)
+			tween(b.stroke, 0.2, { Transparency = 0.35 }, Enum.EasingStyle.Sine)
+		end)
+		btn.MouseButton1Down:Connect(function()
+			tween(b.scale, 0.08, { Scale = 0.94 }, Enum.EasingStyle.Sine)
+		end)
+		btn.MouseButton1Up:Connect(function()
+			tween(b.scale, 0.18, { Scale = 1.04 }, Enum.EasingStyle.Back)
+		end)
+	end
+	hoverFeel(getKey, BTN_HOVER)
+	hoverFeel(verify, Color3.fromRGB(255, 255, 255))
+	getKey.button.MouseEnter:Connect(function()
+		tween(getKey.icon, 0.3, { Rotation = -25 }, Enum.EasingStyle.Back)
+	end)
+	getKey.button.MouseLeave:Connect(function()
+		tween(getKey.icon, 0.3, { Rotation = 0 }, Enum.EasingStyle.Back)
+	end)
+
+	U.closeBtn.MouseEnter:Connect(function()
+		if not ready or finished then
+			return
+		end
+		tween(U.closeBtn, 0.25, { Rotation = 90 }, Enum.EasingStyle.Back)
+		tween(U.closeIcon, 0.25, { ImageColor3 = ERROR }, Enum.EasingStyle.Sine)
+		tween(U.closeStroke, 0.2, { Color = ERROR, Transparency = 0.1 }, Enum.EasingStyle.Sine)
+	end)
+	U.closeBtn.MouseLeave:Connect(function()
+		tween(U.closeBtn, 0.25, { Rotation = 0 }, Enum.EasingStyle.Back)
+		tween(U.closeIcon, 0.25, { ImageColor3 = SECONDARY }, Enum.EasingStyle.Sine)
+		tween(U.closeStroke, 0.2, { Color = SECONDARY, Transparency = 0.5 }, Enum.EasingStyle.Sine)
+	end)
+	U.closeBtn.MouseButton1Click:Connect(function()
 		if ready and not finished then
 			closeGui()
 		end
 	end)
 
-	getKeyBtn.MouseEnter:Connect(function()
-		tween(getKeyBtn, 0.15, { BackgroundColor3 = C.btnHover })
-	end)
-	getKeyBtn.MouseLeave:Connect(function()
-		tween(getKeyBtn, 0.15, { BackgroundColor3 = C.btn })
-	end)
-	verifyBtn.MouseEnter:Connect(function()
-		tween(verifyBtn, 0.15, { BackgroundColor3 = Color3.fromRGB(255, 255, 255) })
-	end)
-	verifyBtn.MouseLeave:Connect(function()
-		tween(verifyBtn, 0.15, { BackgroundColor3 = C.accent })
-	end)
-
-	closeGui = function()
-		if finished then
-			return
+	Blocker.MouseButton1Down:Connect(function()
+		if cfg.Vibrate and not exiting and not finished then
+			task.spawn(vibrateOnce)
 		end
-		finished = true
-		fadeOutAndDestroy(nil)
-	end
+	end)
 
-	-- Nama executor dan statistik layar
 	local execName = "Unknown"
 	pcall(function()
 		if identifyexecutor then
@@ -2002,26 +2593,14 @@ function KeySystem.new(userOptions)
 		end
 	end)
 
-	local dtSmooth = 1 / 60
-	local frameCount = 0
-	local startClock = os.clock()
-	stepConn = RunService.RenderStepped:Connect(function(dt)
-		dtSmooth = dtSmooth * 0.92 + dt * 0.08
-		fx.update(dt, speedVal.Value)
-		frameCount += 1
-		if frameCount % 2 == 0 then
-			edge.update(os.clock() - startClock, edgeVal.Value, minDim)
-		end
-		if spinning then
-			verifyBtn.Rotation = 0
-		end
-		if statusKind == "loading" then
-			statusIcon.Rotation = (statusIcon.Rotation + dt * 360) % 360
-		else
-			statusIcon.Rotation = 0
-		end
-	end)
+	local function scaleFps(v)
+		return scaleColor(v, { { 20, Color3.fromRGB(255, 92, 104) }, { 35, Color3.fromRGB(255, 150, 70) }, { 50, Color3.fromRGB(255, 214, 92) }, { 60, Color3.fromRGB(96, 235, 150) } })
+	end
+	local function scalePing(v)
+		return scaleColor(v, { { 40, Color3.fromRGB(96, 235, 150) }, { 100, Color3.fromRGB(96, 235, 150) }, { 160, Color3.fromRGB(255, 214, 92) }, { 250, Color3.fromRGB(255, 150, 70) }, { 400, Color3.fromRGB(255, 92, 104) } })
+	end
 
+	local dtSmooth = 1 / 60
 	task.spawn(function()
 		while running do
 			local ping = 0
@@ -2029,52 +2608,82 @@ function KeySystem.new(userOptions)
 				ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
 			end)
 			local fps = math.floor(1 / math.max(dtSmooth, 0.001))
-			analysisLabel.Text = ("EXEC %s   |   FPS %d   |   PING %dms"):format(execName:upper():sub(1, 14), fps, ping)
+			local sep = "  " .. tint("|", Color3.fromRGB(88, 94, 108)) .. "  "
+			U.analysis.Text = tint("EXEC " .. escapeRich(execName:upper():sub(1, 14)), Color3.fromRGB(120, 190, 255))
+				.. sep .. tint("FPS " .. fps, scaleFps(fps))
+				.. sep .. tint("PING " .. ping .. "ms", scalePing(ping))
 			task.wait(0.5)
 		end
 	end)
 
-	local function revealPanel()
-		if ready or finished then
-			return
+	local frameCount = 0
+	local startClock = os.clock()
+	local lastPct = -1
+	local stepConn = RunService.RenderStepped:Connect(function(dt)
+		dtSmooth = dtSmooth * 0.92 + dt * 0.08
+		fx.update(dt, speedVal.Value)
+		frameCount += 1
+		if frameCount % 2 == 0 then
+			edge.update(os.clock() - startClock, edgeVal.Value, minDim)
 		end
-		ready = true
-		tween(Panel, 0.6, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
-		if savedKey then
-			setStatus("Saved key found. Checking...", "info")
-			keyBox.Text = savedKey
-			task.delay(0.5, function()
-				attempt(savedKey, true)
-			end)
+		if checking then
+			verify.icon.Rotation = (verify.icon.Rotation + dt * 420) % 360
 		else
-			setStatus("Enter your key to continue", "info")
+			verify.icon.Rotation = 0
 		end
-	end
-
-	-- Intro: logo kode berganti-ganti lalu panel muncul
-	local logoState = nil
-	task.spawn(function()
-		task.wait(0.3)
-		local i = 0
-		while running do
-			i += 1
-			if logoState then
-				dissolveLogo(logoState)
-				logoState = nil
-				task.wait(0.3)
+		if statusKind == "loading" then
+			U.statusIcon.Rotation = (U.statusIcon.Rotation + dt * 360) % 360
+		else
+			U.statusIcon.Rotation = 0
+		end
+		local pct = math.clamp(math.floor(U.fill.Size.X.Scale * 100 + 0.5), 0, 100)
+		if pct ~= lastPct then
+			lastPct = pct
+			if verifyProgress then
+				U.percent.Text = pct .. "%"
 			end
-			local shape = order[((i - 1) % #order) + 1]
-			logoState = buildLogo(LogoHolder, shape, C.accent, C.secondary, logoTextSize)
-			greetLabel.Text = expandName(PHRASES[math.random(1, #PHRASES)])
-			if i == 1 then
-				task.delay(cfg.Intro and 2.2 or 0.4, revealPanel)
-			end
-			if not cfg.Intro then
-				break
-			end
-			task.wait(FORM_TIME + 1.4)
 		end
 	end)
+
+	loopTween(U.getKeyGradient, 3, { Rotation = 360 }, Enum.EasingStyle.Linear)
+
+	local logoState = nil
+	if cfg.Intro then
+		task.spawn(function()
+			task.wait(0.3)
+			local i = 0
+			while running do
+				i += 1
+				if logoState then
+					dissolveLogo(logoState)
+					logoState = nil
+					task.wait(0.15)
+				end
+				local shape = order[((i - 1) % #order) + 1]
+				logoState = buildLogo(LogoHolder, shape, ACCENT, SECONDARY, logoTextSize)
+				local hour = tonumber(os.date("%H")) or 12
+				local pool = {}
+				for _, p in ipairs(PHRASES) do
+					pool[#pool + 1] = p
+				end
+				pool[#pool + 1] = hour < 12 and "Good morning, {name}" or (hour < 18 and "Good afternoon, {name}" or "Good evening, {name}")
+				task.spawn(scrambleText, U.greet, expandName(pool[math.random(1, #pool)]), 0.6)
+				task.wait(FORM_TIME)
+				scanLine(LogoHolder, ACCENT)
+				flash(Gui, ACCENT, 0.86)
+				if i == 1 then
+					task.spawn(revealProfile)
+					task.delay(INTRO_TOTAL - 0.3, revealKey)
+				end
+				task.wait(phase == "intro" and HOLD_TIME or 2.6)
+			end
+		end)
+	else
+		task.delay(0.4, function()
+			revealProfile()
+			revealKey()
+		end)
+	end
 
 	destroy = function()
 		if destroyed then
@@ -2106,8 +2715,6 @@ function KeySystem.new(userOptions)
 	return api
 end
 
--- Menunggu sampai key valid, lalu mengembalikan key tersebut.
--- Berguna kalau script utama mau berhenti di sini sampai key benar.
 function KeySystem.Authenticate(options)
 	local opts = {}
 	for k, v in pairs(options or {}) do
