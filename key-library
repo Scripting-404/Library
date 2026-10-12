@@ -24,7 +24,7 @@ local DESIGN_W, DESIGN_H = 920, 400
 local GRID, CENTER, GRID_R, STROKE, FORM_TIME, HOLD_TIME = 41, 21, 20, 0.055, 1.2, 1.0
 local MAX_CARDS = 6
 local INTRO_TOTAL = 0.3 + 2 * (FORM_TIME + 0.15 + HOLD_TIME)
-local CHARS = { "0", "1", "{", "}", "<", ">", "/", ";", "#", "$", "%", "&", "*", "+", "=", "|" }
+local CHARS = { "0", "1", "{", "}", "<", ">", "/", ";", "#", "$", "%", "&", "*", "+", "=", "|", "(", ")", "[", "]", "!", "?", "~", "^", "@", ":", "_", "-", "\\" }
 local SCRAMBLE_CHARS = {}
 for c in ("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&*+=<>/"):gmatch(".") do
 	SCRAMBLE_CHARS[#SCRAMBLE_CHARS + 1] = c
@@ -64,6 +64,56 @@ local PHRASES = {
 	"Standing by for your key",
 	"All systems nominal",
 	"Stay safe out there, {name}",
+	"Compiling good vibes",
+	"Debugging the universe",
+	"Zero errors detected",
+	"Hello, world",
+	"Boot sequence complete",
+	"Handshake successful",
+	"Packets are flowing",
+	"Latency is looking low",
+	"Caching your preferences",
+	"Optimizing every frame",
+	"Encrypting the session",
+	"Firewall is up and running",
+	"Your key opens the door",
+	"Welcome aboard, {name}",
+	"Great to have you, {name}",
+	"Let's get to work, {name}",
+	"Another day, another script",
+	"Running smoothly",
+	"Fresh build, fresh start",
+	"Compiled with care",
+	"Warming up the CPU",
+	"Allocating memory",
+	"Resolving dependencies",
+	"Checking for updates",
+	"Linking modules",
+	"Mounting the interface",
+	"Sync complete",
+	"Uptime looking great",
+	"Threads are humming",
+	"Bits and bytes aligned",
+	"Made for the curious",
+	"Code runs, you relax",
+	"Press enter to continue",
+	"Keys, please",
+	"Show us your key",
+	"The gate is waiting",
+	"Trust the process",
+	"Think different, {name}",
+	"Keep calm and script on",
+	"Hello there, {name}",
+	"Hey {name}, ready?",
+	"Welcome home, {name}",
+	"All set when you are",
+	"Precision loaded",
+	"Smooth as silk",
+	"Sharpening the pixels",
+	"Booting up awesomeness",
+	"Everything is in sync",
+	"Clean code, clean start",
+	"Loading the good stuff",
 }
 
 local DEFAULTS = {
@@ -853,6 +903,48 @@ Geo.BOLT = { { 0.18, -0.92 }, { -0.52, 0.08 }, { -0.06, 0.08 }, { -0.2, 0.92 }, 
 Geo.PINS = { -0.3, 0, 0.3 }
 Geo.DOTS = { -0.7, -0.54, -0.38 }
 Geo.ATOM = { 0, math.pi / 3, 2 * math.pi / 3 }
+function Geo.line(u, v, pts)
+	local m = math.huge
+	for i = 1, #pts - 1 do
+		local a, b = pts[i], pts[i + 1]
+		local d = Geo.seg(u, v, a[1], a[2], b[1], b[2])
+		if d < m then
+			m = d
+		end
+	end
+	return m
+end
+
+function Geo.arc(cx, cy, a, b, t0, t1, n)
+	local pts = {}
+	for i = 0, n do
+		local t = t0 + (t1 - t0) * i / n
+		pts[#pts + 1] = { cx + a * math.cos(t), cy + b * math.sin(t) }
+	end
+	return pts
+end
+
+Geo.BRACE = { { -0.38, -0.8 }, { -0.62, -0.66 }, { -0.62, -0.14 }, { -0.84, 0 }, { -0.62, 0.14 }, { -0.62, 0.66 }, { -0.38, 0.8 } }
+Geo.BRACKET = { { -0.4, -0.7 }, { -0.8, -0.7 }, { -0.8, 0.7 }, { -0.4, 0.7 } }
+Geo.DOTS3 = { -0.2, 0, 0.2 }
+Geo.DB_TOP = Geo.arc(0, -0.5, 0.62, 0.22, 0, 2 * math.pi, 28)
+Geo.DB_M1 = Geo.arc(0, -0.1, 0.62, 0.22, 0, math.pi, 16)
+Geo.DB_M2 = Geo.arc(0, 0.3, 0.62, 0.22, 0, math.pi, 16)
+Geo.DB_BOT = Geo.arc(0, 0.7, 0.62, 0.22, 0, math.pi, 16)
+Geo.HEART = {}
+for i = 0, 47 do
+	local t = (i / 48) * 2 * math.pi
+	local hx = 16 * math.sin(t) ^ 3
+	local hy = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+	Geo.HEART[#Geo.HEART + 1] = { hx / 17.5, -(hy + 2.5) / 17.5 }
+end
+Geo.WIFI = { 0.38, 0.68, 0.98 }
+Geo.CURSOR = { { -0.5, -0.85 }, { -0.5, 0.6 }, { -0.14, 0.3 }, { 0.08, 0.86 }, { 0.3, 0.77 }, { 0.08, 0.22 }, { 0.55, 0.22 } }
+Geo.PULSE = { { -0.9, 0.05 }, { -0.45, 0.05 }, { -0.3, -0.35 }, { -0.1, 0.5 }, { 0.1, -0.7 }, { 0.3, 0.2 }, { 0.45, 0.05 }, { 0.9, 0.05 } }
+Geo.TRAY = { { -0.72, 0.12 }, { -0.72, 0.72 }, { 0.72, 0.72 }, { 0.72, 0.12 } }
+Geo.ARROWHEAD = { { -0.4, -0.08 }, { 0, 0.34 }, { 0.4, -0.08 } }
+Geo.PLAY = { { -0.22, -0.5 }, { 0.54, 0 }, { -0.22, 0.5 } }
+Geo.BUG_NODES = { { -0.32, -0.7 }, { -0.32, 0.7 }, { 0.4, -0.38 } }
 
 local Shapes = {
 	roblox = function(u, v)
@@ -1031,8 +1123,144 @@ local Shapes = {
 		end
 		return 0
 	end,
+	braces = function(u, v)
+		local x = u > 0 and -u or u
+		if Geo.line(x, v, Geo.BRACE) <= 0.07 then
+			return 1
+		end
+		for _, dx in ipairs(Geo.DOTS3) do
+			if Geo.hyp(u - dx, v) <= 0.055 then
+				return 1
+			end
+		end
+		return 0
+	end,
+	brackets = function(u, v)
+		local x = u > 0 and -u or u
+		if Geo.line(x, v, Geo.BRACKET) <= 0.07 then
+			return 1
+		end
+		if Geo.seg(u, v, -0.14, 0, 0.14, 0) <= 0.06 or Geo.seg(u, v, 0, -0.14, 0, 0.14) <= 0.06 then
+			return 1
+		end
+		return 0
+	end,
+	database = function(u, v)
+		local x = math.abs(u)
+		if v >= -0.5 and v <= 0.7 and math.abs(x - 0.62) <= 0.05 then
+			return 1
+		end
+		if Geo.line(u, v, Geo.DB_TOP) <= 0.055 or Geo.line(u, v, Geo.DB_M1) <= 0.055
+			or Geo.line(u, v, Geo.DB_M2) <= 0.055 or Geo.line(u, v, Geo.DB_BOT) <= 0.055 then
+			return 1
+		end
+		return 0
+	end,
+	cloud = function(u, v)
+		local d = math.min(
+			Geo.hyp(u + 0.42, v - 0.12) - 0.3,
+			Geo.hyp(u + 0.02, v + 0.14) - 0.42,
+			Geo.hyp(u - 0.44, v - 0.12) - 0.3,
+			Geo.rbox(u, v, 0.02, 0.31, 0.76, 0.17, 0.17)
+		)
+		if math.abs(d) <= STROKE then
+			return 1
+		end
+		return d < 0 and 2 or 0
+	end,
+	wifi = function(u, v)
+		local dx, dy = u, v - 0.6
+		local r = Geo.hyp(dx, dy)
+		if r <= 0.1 then
+			return 1
+		end
+		if dy < 0 and -dy >= math.abs(dx) * 0.9 then
+			for _, rr in ipairs(Geo.WIFI) do
+				if math.abs(r - rr) <= 0.065 then
+					return 1
+				end
+			end
+		end
+		return 0
+	end,
+	heart = function(u, v)
+		if Geo.poly(u, v, Geo.HEART) <= STROKE then
+			return 1
+		end
+		return Geo.inside(u, v, Geo.HEART) and 2 or 0
+	end,
+	bug = function(u, v)
+		local x = math.abs(u)
+		local b = Geo.hyp(u / 0.4, (v - 0.12) / 0.55)
+		if math.abs(b - 1) <= 0.1 or (b < 1 and x <= 0.035) then
+			return 1
+		end
+		if math.abs(Geo.hyp(u, v + 0.62) - 0.2) <= 0.06 then
+			return 1
+		end
+		if Geo.seg(x, v, 0.38, -0.2, 0.8, -0.38) <= 0.055 or Geo.seg(x, v, 0.4, 0.12, 0.84, 0.12) <= 0.055
+			or Geo.seg(x, v, 0.36, 0.44, 0.78, 0.62) <= 0.055 or Geo.seg(x, v, 0.1, -0.78, 0.3, -0.92) <= 0.05 then
+			return 1
+		end
+		return 0
+	end,
+	branch = function(u, v)
+		if Geo.seg(u, v, -0.32, -0.54, -0.32, 0.54) <= 0.065 or Geo.seg(u, v, -0.32, 0.22, 0.4, -0.2) <= 0.065 then
+			return 1
+		end
+		for _, n in ipairs(Geo.BUG_NODES) do
+			if math.abs(Geo.hyp(u - n[1], v - n[2]) - 0.17) <= 0.06 then
+				return 1
+			end
+		end
+		return 0
+	end,
+	pulse = function(u, v)
+		return Geo.line(u, v, Geo.PULSE) <= 0.065 and 1 or 0
+	end,
+	eye = function(u, v)
+		if math.abs(u) <= 0.92 then
+			local h = 0.55 * (1 - (u / 0.92) ^ 2)
+			if math.abs(math.abs(v) - h) <= 0.06 then
+				return 1
+			end
+		end
+		local r = Geo.hyp(u, v)
+		if r <= 0.17 or math.abs(r - 0.34) <= 0.05 then
+			return 1
+		end
+		return 0
+	end,
+	cursor = function(u, v)
+		if Geo.poly(u, v, Geo.CURSOR) <= STROKE then
+			return 1
+		end
+		return Geo.inside(u, v, Geo.CURSOR) and 2 or 0
+	end,
+	download = function(u, v)
+		if Geo.seg(u, v, 0, -0.8, 0, 0.32) <= 0.07 or Geo.line(u, v, Geo.ARROWHEAD) <= 0.07 or Geo.line(u, v, Geo.TRAY) <= 0.065 then
+			return 1
+		end
+		return 0
+	end,
+	play = function(u, v)
+		if math.abs(Geo.hyp(u, v) - 0.84) <= STROKE or Geo.inside(u, v, Geo.PLAY) then
+			return 1
+		end
+		return 0
+	end,
+	hash = function(u, v)
+		if Geo.seg(u, v, -0.2, -0.75, -0.38, 0.75) <= 0.07 or Geo.seg(u, v, 0.38, -0.75, 0.2, 0.75) <= 0.07
+			or Geo.seg(u, v, -0.7, -0.28, 0.7, -0.28) <= 0.07 or Geo.seg(u, v, -0.7, 0.28, 0.7, 0.28) <= 0.07 then
+			return 1
+		end
+		return 0
+	end,
 }
-local SHAPE_NAMES = { "roblox", "lua", "cyber", "code", "hello", "core", "shield", "lock", "bolt", "terminal", "gear", "globe", "key", "atom" }
+local SHAPE_NAMES = {
+	"roblox", "lua", "cyber", "code", "hello", "core", "shield", "lock", "bolt", "terminal", "gear", "globe", "key", "atom",
+	"braces", "brackets", "database", "cloud", "wifi", "heart", "bug", "branch", "pulse", "eye", "cursor", "download", "play", "hash",
+}
 
 local EDGE_STOPS = {
 	{ 0.00, Color3.fromRGB(255, 38, 52) },
@@ -2173,6 +2401,50 @@ function KeySystem.new(userOptions)
 		}),
 	}, U.fill)
 
+	local introBar = {}
+	introBar.group = new("Frame", {
+		Name = "IntroBar",
+		Size = UDim2.fromOffset(533.6, 320),
+		BackgroundTransparency = 1,
+		Visible = cfg.Intro and true or false,
+		ZIndex = 7,
+	}, Info)
+	introBar.label = sizedText(label(introBar.group, {
+		Position = UDim2.fromOffset(0, 276.8),
+		Size = UDim2.fromOffset(352, 24),
+		Text = "",
+		Font = Enum.Font.Code,
+		TextColor3 = SECONDARY,
+	}), 14, 4)
+	introBar.percent = sizedText(label(introBar.group, {
+		Position = UDim2.fromOffset(400.2, 276.8),
+		Size = UDim2.fromOffset(133.4, 24),
+		Text = "0%",
+		Font = Enum.Font.Code,
+		TextColor3 = ACCENT,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}), 14, 4)
+	introBar.track = new("Frame", {
+		Position = UDim2.fromOffset(0, 305.6),
+		Size = UDim2.fromOffset(533.6, 9.6),
+		BackgroundColor3 = TRACK_BG,
+		BorderSizePixel = 0,
+		ZIndex = 7,
+	}, introBar.group)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, introBar.track)
+	introBar.fill = new("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = ACCENT,
+		BorderSizePixel = 0,
+		ZIndex = 8,
+	}, introBar.track)
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, introBar.fill)
+	new("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, SECONDARY),
+			ColorSequenceKeypoint.new(1, ACCENT),
+		}),
+	}, introBar.fill)
 	U.closeBtn = new("TextButton", {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
@@ -2955,6 +3227,23 @@ function KeySystem.new(userOptions)
 	end
 	apply(profileItems, 0)
 	apply(keyItems, 0)
+	local introItems = {}
+	if cfg.Intro then
+		collect(introItems, introBar.label)
+		collect(introItems, introBar.percent)
+		collect(introItems, introBar.track)
+		apply(introItems, 0)
+	end
+	local gatedGuis = { U.inputFrame, getKey.button, verify.button, U.closeBtn, U.statusIcon, U.status, U.percent, U.track }
+	for _, b in ipairs(cardsFrame) do
+		gatedGuis[#gatedGuis + 1] = b
+	end
+	local function setGated(v)
+		for _, g in ipairs(gatedGuis) do
+			g.Visible = v
+		end
+	end
+	setGated(false)
 	U.separator.Size = UDim2.fromOffset(1, 0)
 
 	local ready = false
@@ -2968,6 +3257,39 @@ function KeySystem.new(userOptions)
 	local api = { Gui = Gui, Closed = false, Key = nil }
 	local attempt, onFail, onSuccess, shutdown
 
+	local introActive = false
+	local lastIntroPct, lastIntroStep = -1, nil
+	local INTRO_STEPS = {
+		{ 0, "Booting engine" },
+		{ 12, "Loading assets" },
+		{ 26, "Resolving dependencies" },
+		{ 40, "Linking modules" },
+		{ 54, "Syncing with server" },
+		{ 68, "Compiling interface" },
+		{ 82, "Optimizing frames" },
+		{ 94, "Almost ready" },
+	}
+	local function startIntroBar()
+		if not cfg.Intro or introActive then
+			return
+		end
+		introActive = true
+		apply(introItems, 1, 0.4)
+		tween(introBar.fill, INTRO_TOTAL - 0.3, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+	end
+	local function endIntroBar()
+		if not introActive then
+			return
+		end
+		introActive = false
+		introBar.percent.Text = "100%"
+		introBar.label.Text = "Ready"
+		tween(introBar.fill, 0.2, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Sine)
+		apply(introItems, 0, 0.35)
+		task.delay(0.4, function()
+			introBar.group.Visible = false
+		end)
+	end
 	local function revealProfile()
 		tween(U.separator, 0.7, { Size = UDim2.fromOffset(1, 288) }, Enum.EasingStyle.Quint)
 		tween(U.separator, 0.7, { BackgroundTransparency = 0.5 }, Enum.EasingStyle.Quint)
@@ -2985,6 +3307,8 @@ function KeySystem.new(userOptions)
 			return
 		end
 		phase = "key"
+		endIntroBar()
+		setGated(true)
 		apply(keyItems, 1, 0.45)
 		loopTween(verify.stroke, 1.2, { Thickness = 3.2, Transparency = 0.7 }, Enum.EasingStyle.Sine, true)
 		ready = true
@@ -3348,6 +3672,23 @@ function KeySystem.new(userOptions)
 		else
 			U.statusIcon.Rotation = 0
 		end
+		if introActive then
+			local ip = math.clamp(math.floor(introBar.fill.Size.X.Scale * 100 + 0.5), 0, 100)
+			if ip ~= lastIntroPct then
+				lastIntroPct = ip
+				introBar.percent.Text = ip .. "%"
+				local step = INTRO_STEPS[1][2]
+				for _, st in ipairs(INTRO_STEPS) do
+					if ip >= st[1] then
+						step = st[2]
+					end
+				end
+				if step ~= lastIntroStep then
+					lastIntroStep = step
+					task.spawn(scrambleText, introBar.label, step, 0.3)
+				end
+			end
+		end
 		local pct = math.clamp(math.floor(U.fill.Size.X.Scale * 100 + 0.5), 0, 100)
 		if pct ~= lastPct then
 			lastPct = pct
@@ -3385,6 +3726,7 @@ function KeySystem.new(userOptions)
 				flash(Gui, ACCENT, 0.86)
 				if i == 1 then
 					task.spawn(revealProfile)
+					startIntroBar()
 					task.delay(INTRO_TOTAL - 0.3, revealKey)
 				end
 				task.wait(phase == "intro" and HOLD_TIME or 2.6)
