@@ -1,1 +1,24 @@
-
+{
+  "Messages": [
+    "Welcome back, {name}",
+    "Enter your key to continue",
+    "Hello, {name}. Ready when you are",
+    "Good to see you again, {name}",
+    "Unlock the hub, {name}",
+    "Your key is the only way in",
+    "Verifying access for {name}",
+    "Stay sharp, {name}",
+    "One key. Full access",
+    "Scripting404 is waiting for you, {name}",
+    "Paste your key and let's go",
+    "Secure session ready, {name}",
+    "Don't share your key, {name}",
+    "Almost there, {name}",
+    "Initializing your workspace",
+    "Authentication required",
+    "Let's get started, {name}",
+    "Welcome to the other side, {name}",
+    "Key in. Everything else follows",
+    "Glad you're here, {name}"
+  ]
+}
