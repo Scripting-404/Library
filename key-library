@@ -1552,12 +1552,7 @@ function KeySystem.new(userOptions)
 	Gui.Parent = host
 
 	local function viewport()
-		local s = Gui.AbsoluteSize
-		if s.X < 2 or s.Y < 2 then
-			local cam = workspace.CurrentCamera
-			s = cam and cam.ViewportSize or Vector2.new(1280, 720)
-		end
-		return s
+		return Gui.AbsoluteSize
 	end
 
 	local Blur = new("BlurEffect", { Name = "KeySystemBlur", Size = 0 }, Lighting)
@@ -1666,8 +1661,16 @@ function KeySystem.new(userOptions)
 	tween(TagIcon, 0.8, { ImageTransparency = 0.2 }, Enum.EasingStyle.Sine)
 	tween(TagLabel, 0.8, { TextTransparency = 0.2 }, Enum.EasingStyle.Sine)
 
+	local lastVpX, lastVpY = 0, 0
 	local function applyLayout()
 		local vp = viewport()
+		if vp.X < 2 or vp.Y < 2 then
+			return false
+		end
+		if vp.X == lastVpX and vp.Y == lastVpY then
+			return true
+		end
+		lastVpX, lastVpY = vp.X, vp.Y
 		minDim = math.min(vp.X, vp.Y)
 		if not exiting then
 			BASE_SCALE = math.clamp(math.min(vp.X * 0.94 / DESIGN_W, vp.Y * 0.86 / DESIGN_H), 0.2, 3)
@@ -1675,6 +1678,7 @@ function KeySystem.new(userOptions)
 		end
 		tagScale.Scale = math.clamp(minDim / 450, 0.75, 2.6)
 		edge.layout(vp.X, vp.Y)
+		return true
 	end
 	applyLayout()
 	Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(applyLayout)
@@ -2623,6 +2627,9 @@ function KeySystem.new(userOptions)
 		dtSmooth = dtSmooth * 0.92 + dt * 0.08
 		fx.update(dt, speedVal.Value)
 		frameCount += 1
+		if frameCount % 10 == 0 then
+			applyLayout()
+		end
 		if frameCount % 2 == 0 then
 			edge.update(os.clock() - startClock, edgeVal.Value, minDim)
 		end
