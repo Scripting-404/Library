@@ -117,6 +117,8 @@ __modules["variables"] = function()
 		Title = "Ophyn",
 		Description = "Key System",
 		Logo = "rbxassetid://111673746737789",
+		-- URL raw JSON ikon (opsional). Kosong = pakai pack Footagesus yang diubah ke JSON + cache lokal.
+		IconsJson = "",
 		Theme = "Plant-Dark",
 		Folder = "Ophyn-KSY",
 
@@ -264,99 +266,51 @@ end
 __modules["utilities/lucide"] = function()
 
 	local Http = import("utilities/http")
+	local HttpService = game:GetService("HttpService")
 
 	local Lucide = {}
 
-	local PACK_URL = "https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/lucide/dist/Icons.lua"
-	local CACHE_FOLDER = "Ophyn-KSY"
-	local CACHE_FILE = CACHE_FOLDER .. "/lucide_pack.lua"
+	-- Ikon inti = raw JSON.
+	-- Urutan sumber:
+	--   1) cache lokal  <folder>/icons.json
+	--   2) raw JSON milik kamu (cfg.IconsJson / Lucide.configure({ url = ... }))
+	--   3) pack Footagesus/Icons (Lua) -> otomatis diubah menjadi JSON lalu di-cache
+	local FALLBACK_PACK_URL = "https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/lucide/dist/Icons.lua"
 	local PREFIX = "lucide:"
+	local CACHE_MAX_AGE = 60 * 60 * 24 * 7
 
-	local pack = nil
+	local config = { url = "", folder = "Ophyn-KSY" }
+
+	--[[
+		Format raw JSON yang didukung (longgar, salah satu cukup):
+
+		{
+		  "spritesheets": { "1": "rbxassetid://123" },          -- opsional
+		  "icons": {
+		    "house": "rbxassetid://456",                        -- asset langsung
+		    "x":     { "i": "1", "s": [48,48], "p": [96,0] },   -- sprite: image, size, position
+		    "moon":  { "image": "rbxassetid://789",
+		               "rectSize": {"x":48,"y":48}, "rectOffset": {"x":0,"y":48} }
+		  }
+		}
+
+		Map datar { "house": "rbxassetid://456", ... } juga bisa.
+	]]
+
+	local index = nil
 	local failed = false
 	local loading = false
 	local preloaded = {}
 	local warned = {}
 
-	local function readCache()
-		if not (isfile and readfile) then
-			return nil
-		end
-		local ok, body = pcall(function()
-			if isfile(CACHE_FILE) then
-				return readfile(CACHE_FILE)
-			end
-		end)
-		if ok and type(body) == "string" and body ~= "" then
-			return body
-		end
-		return nil
+	local RESERVED = { version = true, source = true, time = true, meta = true, spritesheets = true, sheets = true }
+
+	local function cachePath()
+		return config.folder .. "/icons.json"
 	end
 
-	local function writeCache(body)
-		if not writefile then
-			return
-		end
-		pcall(function()
-			if isfolder and makefolder and not isfolder(CACHE_FOLDER) then
-				makefolder(CACHE_FOLDER)
-			end
-			writefile(CACHE_FILE, body)
-		end)
-	end
-
-	local function parsePack(body)
-		local chunk, err = loadstring(body)
-		if not chunk then
-			error(err)
-		end
-		return chunk()
-	end
-
-	local function loadPack()
-		if pack or failed then
-			return pack
-		end
-		if loading then
-			while loading do
-				task.wait()
-			end
-			return pack
-		end
-
-		loading = true
-		local ok, result = pcall(function()
-			if not loadstring then
-				error("loadstring is not available")
-			end
-
-			local cached = readCache()
-			if cached then
-				local okParse, parsed = pcall(parsePack, cached)
-				if okParse and type(parsed) == "table" then
-					return parsed
-				end
-			end
-
-			local body, err = Http.get(PACK_URL, 1)
-			if not body then
-				error("could not download the icon pack: " .. tostring(err))
-			end
-			local parsed = parsePack(body)
-			if type(parsed) == "table" then
-				writeCache(body)
-			end
-			return parsed
-		end)
-		loading = false
-
-		if ok and type(result) == "table" then
-			pack = result
-		else
-			failed = true
-			warn("[Ophyn] Lucide icons unavailable: " .. tostring(result))
-		end
-		return pack
+	local function sourceId()
+		return config.url ~= "" and ("json:" .. config.url) or "pack"
 	end
 
 	local function toAsset(value)
@@ -367,6 +321,242 @@ __modules["utilities/lucide"] = function()
 			return "rbxassetid://" .. value
 		end
 		return value
+	end
+
+	local function pick(t, ...)
+		for i = 1, select("#", ...) do
+			local v = t[select(i, ...)]
+			if v ~= nil then
+				return v
+			end
+		end
+		return nil
+	end
+
+	local function toVec(v)
+		if typeof(v) == "Vector2" then
+			return v
+		end
+		if type(v) == "table" then
+			local x = tonumber(v[1] or v.x or v.X)
+			local y = tonumber(v[2] or v.y or v.Y)
+			if x and y then
+				return Vector2.new(x, y)
+			end
+		end
+		return nil
+	end
+
+	local function normalizeEntry(entry, sheets)
+		if type(entry) == "number" or type(entry) == "string" then
+			local asset = toAsset(entry)
+			if type(asset) ~= "string" or asset == "" then
+				return nil
+			end
+			return { Image = asset, RectSize = Vector2.new(0, 0), RectOffset = Vector2.new(0, 0) }
+		end
+		if type(entry) ~= "table" then
+			return nil
+		end
+
+		local image = pick(entry, "i", "image", "Image", "id", "Id", "asset", "Asset")
+		if image == nil then
+			return nil
+		end
+		if sheets and sheets[tostring(image)] ~= nil then
+			image = sheets[tostring(image)]
+		end
+		image = toAsset(image)
+		if type(image) ~= "string" or image == "" then
+			return nil
+		end
+
+		local size = toVec(pick(entry, "s", "size", "rectSize", "RectSize", "ImageRectSize"))
+		local offset = toVec(pick(entry, "p", "position", "offset", "rectOffset", "RectOffset", "RectPosition", "ImageRectPosition", "ImageRectOffset"))
+		return {
+			Image = image,
+			RectSize = size or Vector2.new(0, 0),
+			RectOffset = offset or Vector2.new(0, 0),
+		}
+	end
+
+	local function normalizeName(name)
+		return (tostring(name):lower():gsub("_", "-"))
+	end
+
+	local function buildIndex(decoded)
+		if type(decoded) ~= "table" then
+			return nil
+		end
+		local sheets = pick(decoded, "spritesheets", "Spritesheets", "sheets")
+		local list = pick(decoded, "icons", "Icons") or decoded
+
+		local out, count = {}, 0
+		for name, entry in pairs(list) do
+			if type(name) == "string" and not (list == decoded and RESERVED[name:lower()]) then
+				local norm = normalizeEntry(entry, type(sheets) == "table" and sheets or nil)
+				if norm then
+					out[normalizeName(name)] = norm
+					count += 1
+				end
+			end
+		end
+		if count == 0 then
+			return nil
+		end
+		return out
+	end
+
+	local function encodeIndex(idx)
+		local icons = {}
+		for name, e in pairs(idx) do
+			icons[name] = {
+				i = e.Image,
+				s = { e.RectSize.X, e.RectSize.Y },
+				p = { e.RectOffset.X, e.RectOffset.Y },
+			}
+		end
+		return HttpService:JSONEncode({
+			version = 1,
+			source = sourceId(),
+			time = os.time(),
+			icons = icons,
+		})
+	end
+
+	local function readCache()
+		if not (isfile and readfile) then
+			return nil
+		end
+		local ok, body = pcall(function()
+			if isfile(cachePath()) then
+				return readfile(cachePath())
+			end
+		end)
+		if not (ok and type(body) == "string" and body ~= "") then
+			return nil
+		end
+		local okJson, decoded = pcall(function()
+			return HttpService:JSONDecode(body)
+		end)
+		if not (okJson and type(decoded) == "table") then
+			return nil
+		end
+		if decoded.source ~= sourceId() then
+			return nil
+		end
+		local idx = buildIndex(decoded)
+		if not idx then
+			return nil
+		end
+		local age = os.time() - (tonumber(decoded.time) or 0)
+		return idx, age > CACHE_MAX_AGE
+	end
+
+	local function writeCache(idx)
+		if not writefile then
+			return
+		end
+		pcall(function()
+			if isfolder and makefolder and not isfolder(config.folder) then
+				makefolder(config.folder)
+			end
+			writefile(cachePath(), encodeIndex(idx))
+		end)
+	end
+
+	local function fetchRemoteJson()
+		if config.url == "" then
+			return nil
+		end
+		local body, err = Http.get(config.url, 1)
+		if not body then
+			warn("[Ophyn] icon JSON could not be downloaded: " .. tostring(err))
+			return nil
+		end
+		local ok, decoded = pcall(function()
+			return HttpService:JSONDecode(body)
+		end)
+		if not ok then
+			warn("[Ophyn] icon JSON is invalid: " .. tostring(decoded))
+			return nil
+		end
+		return buildIndex(decoded)
+	end
+
+	local function fetchPack()
+		if not loadstring then
+			return nil
+		end
+		local body, err = Http.get(FALLBACK_PACK_URL, 1)
+		if not body then
+			warn("[Ophyn] icon pack could not be downloaded: " .. tostring(err))
+			return nil
+		end
+		local fn = loadstring(body)
+		if not fn then
+			return nil
+		end
+		local ok, pack = pcall(fn)
+		if not ok then
+			return nil
+		end
+		return buildIndex(pack)
+	end
+
+	local function loadIndex()
+		if index or failed then
+			return index
+		end
+		if loading then
+			while loading do
+				task.wait()
+			end
+			return index
+		end
+
+		loading = true
+		local ok, result = pcall(function()
+			local cached, stale = readCache()
+			if cached and not stale then
+				return cached
+			end
+
+			local fresh = fetchRemoteJson() or fetchPack()
+			if fresh then
+				writeCache(fresh)
+				return fresh
+			end
+			return cached
+		end)
+		loading = false
+
+		if ok and type(result) == "table" then
+			index = result
+		else
+			failed = true
+			warn("[Ophyn] icons unavailable: " .. tostring(result))
+		end
+		return index
+	end
+
+	function Lucide.configure(opts)
+		if type(opts) ~= "table" then
+			return Lucide
+		end
+		local newUrl = type(opts.url) == "string" and opts.url or config.url
+		local newFolder = type(opts.folder) == "string" and opts.folder ~= "" and opts.folder or config.folder
+		if (newUrl ~= config.url or newFolder ~= config.folder) and not loading then
+			index = nil
+			failed = false
+		end
+		config.url = newUrl
+		config.folder = newFolder
+		return Lucide
+	end
+
+	function Lucide.preload()
+		task.spawn(loadIndex)
 	end
 
 	function Lucide.isName(value)
@@ -406,37 +596,35 @@ __modules["utilities/lucide"] = function()
 			return nil
 		end
 
-		local name = stripPrefix(value):lower():gsub("_", "-")
-		local loaded = loadPack()
-		if not loaded then
+		local idx = loadIndex()
+		if not idx then
 			return nil
 		end
 
-		local icons = loaded.Icons or loaded
-		local entry = type(icons) == "table" and icons[name] or nil
-		if type(entry) ~= "table" then
+		local name = normalizeName(stripPrefix(value))
+		local entry = idx[name] or idx[normalizeName(value)]
+		if not entry then
 			if not warned[name] then
 				warned[name] = true
-				warn('[Ophyn] unknown Lucide icon "' .. tostring(value) .. '"')
+				warn('[Ophyn] unknown icon "' .. tostring(value) .. '"')
 			end
 			return nil
 		end
 
-		local sheet = entry.Image
-		if type(loaded.Spritesheets) == "table" and loaded.Spritesheets[tostring(entry.Image)] ~= nil then
-			sheet = loaded.Spritesheets[tostring(entry.Image)]
-		end
-		sheet = toAsset(sheet)
-		if type(sheet) ~= "string" then
-			return nil
-		end
-
-		preload(sheet)
+		preload(entry.Image)
 		return {
-			Image = sheet,
-			RectSize = entry.ImageRectSize or Vector2.new(0, 0),
-			RectOffset = entry.ImageRectPosition or entry.ImageRectOffset or Vector2.new(0, 0),
+			Image = entry.Image,
+			RectSize = entry.RectSize,
+			RectOffset = entry.RectOffset,
 		}
+	end
+
+	function Lucide.has(value)
+		local idx = loadIndex()
+		if not (idx and Lucide.isName(value)) then
+			return false
+		end
+		return (idx[normalizeName(stripPrefix(value))] or idx[normalizeName(value)]) ~= nil
 	end
 
 	function Lucide.apply(label, value)
@@ -1647,6 +1835,9 @@ function Pages.new(ctx)
 		ImageColor3 = iconRole("muted"),
 		ZIndex = 6,
 	}, closeBtn)
+	if ctx.applyIcon then
+		ctx.applyIcon(closeIcon, "x", Images.CLOSE_ICON, 14)
+	end
 
 	closeBtn.MouseEnter:Connect(function()
 		tween(closeBtn, 0.15, { BackgroundTransparency = 0 })
@@ -4202,6 +4393,19 @@ local function icon(parent, x, y, color, image)
 	return holder
 end
 
+local function jsonIcon(label, name, fallback, size)
+	if Lucide.apply(label, name) then
+		if size then
+			label.Size = UDim2.new(0, size, 0, size)
+		end
+		return true
+	end
+	label.ImageRectSize = Vector2.new(0, 0)
+	label.ImageRectOffset = Vector2.new(0, 0)
+	label.Image = fallback or ""
+	return false
+end
+
 local function decor(parent, w, h, x, y, transparency, rotation)
 	local img = make("ImageLabel", {
 		Size = UDim2.new(0, w, 0, h),
@@ -4427,6 +4631,9 @@ function UI.new(options)
 	for k, v in pairs(options or {}) do
 		cfg[k] = v
 	end
+
+	Lucide.configure({ url = cfg.IconsJson, folder = cfg.Folder })
+	Lucide.preload()
 
 	local HUB_NAME = tostring(cfg.Title)
 	local HUB_SUBTITLE = tostring(cfg.Description)
@@ -5407,6 +5614,7 @@ function UI.new(options)
 		ImageColor3 = iconRole("muted"),
 		ZIndex = 6,
 	}, closeBtn)
+	jsonIcon(closeIcon, "x", CLOSE_ICON, 14)
 
 	local moonBtn = make("TextButton", {
 		Name = "ThemeButton",
@@ -5431,6 +5639,7 @@ function UI.new(options)
 		ImageColor3 = iconRole("muted"),
 		ZIndex = 6,
 	}, moonBtn)
+	jsonIcon(moonIcon, "moon", MOON_ICON, 14)
 	moonBtn.Visible = SHOW_CHANGE_THEME
 
 	local closeGui
@@ -5444,6 +5653,7 @@ function UI.new(options)
 		fade = fade,
 		setRole = setRole,
 		icon = icon,
+		applyIcon = jsonIcon,
 		assetId = assetId,
 		contrastOn = contrastOn,
 		iconRole = iconRole,
@@ -6566,16 +6776,174 @@ function UI.new(options)
 		task.spawn(switchTheme)
 	end)
 
+	-- ===== Drag halus + efek miring =====
+	local RunService = game:GetService("RunService")
+
+	local DRAG_HANDLE_H = 38
+	local DRAG_HANDLE_RIGHT = 70
+	local TILT_MAX = 9
+	local TILT_GAIN = 0.0065
+	local TILT_STIFFNESS = 230
+	local TILT_DAMPING = 17
+	local FOLLOW_SPEED = 22
+	local DRAG_SCALE = 1.03
+	local EDGE_MARGIN = 8
+
+	local winPos, winTarget = nil, nil
+	local moved = false
+	local tilt, tiltVel, velX, scale = 0, 0, 0, 1
+	local dragging = false
+	local dragInput, dragStart, startTarget = nil, nil, nil
+	local stepConn = nil
+
+	local dragScale = make("UIScale", { Scale = 1 }, main)
+
+	local function clampPos(p)
+		local view = root.AbsoluteSize
+		local half = main.AbsoluteSize / 2
+		local minX, maxX = half.X + EDGE_MARGIN, view.X - half.X - EDGE_MARGIN
+		local minY, maxY = half.Y + EDGE_MARGIN, view.Y - half.Y - EDGE_MARGIN
+		local x = minX > maxX and view.X / 2 or math.clamp(p.X, minX, maxX)
+		local y = minY > maxY and view.Y / 2 or math.clamp(p.Y, minY, maxY)
+		return Vector2.new(x, y)
+	end
+
+	local function applyTransform()
+		main.Position = UDim2.new(0, math.round(winPos.X), 0, math.round(winPos.Y))
+		main.Rotation = tilt
+		dragScale.Scale = scale
+	end
+
+	local function stopStep()
+		if stepConn then
+			stepConn:Disconnect()
+			stepConn = nil
+		end
+	end
+
+	local function step(dt)
+		dt = math.min(dt, 1 / 30)
+
+		local prevX = winPos.X
+		winPos = winPos + (winTarget - winPos) * (1 - math.exp(-FOLLOW_SPEED * dt))
+
+		local vx = (winPos.X - prevX) / math.max(dt, 1e-4)
+		velX = velX + (vx - velX) * (1 - math.exp(-18 * dt))
+
+		local tiltTarget = math.clamp(velX * TILT_GAIN, -TILT_MAX, TILT_MAX)
+		local acc = (tiltTarget - tilt) * TILT_STIFFNESS - tiltVel * TILT_DAMPING
+		tiltVel = tiltVel + acc * dt
+		tilt = tilt + tiltVel * dt
+
+		local scaleTarget = dragging and DRAG_SCALE or 1
+		scale = scale + (scaleTarget - scale) * (1 - math.exp(-14 * dt))
+
+		applyTransform()
+
+		if not dragging
+			and (winTarget - winPos).Magnitude < 0.3
+			and math.abs(velX) < 2
+			and math.abs(tilt) < 0.05
+			and math.abs(tiltVel) < 0.3
+			and math.abs(scale - 1) < 0.0005
+		then
+			winPos = winTarget
+			tilt, tiltVel, velX, scale = 0, 0, 0, 1
+			applyTransform()
+			stopStep()
+		end
+	end
+
+	local function ensureStep()
+		if not stepConn then
+			stepConn = RunService.RenderStepped:Connect(step)
+		end
+	end
+
 	local function snap()
 		local size = root.AbsoluteSize
 		if size.X <= 0 or size.Y <= 0 then
 			main.Position = UDim2.new(0.5, 0, 0.5, 0)
 			return
 		end
-		main.Position = UDim2.new(0, math.floor(size.X / 2), 0, math.floor(size.Y / 2))
+		if moved and winPos and winTarget then
+			winTarget = clampPos(winTarget)
+			ensureStep()
+			return
+		end
+		winPos = Vector2.new(math.floor(size.X / 2), math.floor(size.Y / 2))
+		winTarget = winPos
+		main.Position = UDim2.new(0, winPos.X, 0, winPos.Y)
 	end
 	snap()
 	root:GetPropertyChangedSignal("AbsoluteSize"):Connect(snap)
+
+	local dragHandle = make("Frame", {
+		Name = "DragHandle",
+		Size = UDim2.new(1, -DRAG_HANDLE_RIGHT, 0, DRAG_HANDLE_H),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Active = true,
+		ZIndex = 50,
+	}, main)
+
+	local function isPointer(input)
+		return input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+	end
+
+	local function endDrag()
+		dragging = false
+		dragInput = nil
+	end
+
+	local dragConns = {}
+
+	table.insert(dragConns, dragHandle.InputBegan:Connect(function(input)
+		if not isPointer(input) or dragging or not state.ready or state.closing or not winPos then
+			return
+		end
+		dragging = true
+		moved = true
+		dragInput = input
+		dragStart = input.Position
+		startTarget = winTarget or winPos
+		ensureStep()
+	end))
+
+	table.insert(dragConns, UserInputService.InputChanged:Connect(function(input)
+		if not dragging or not dragInput then
+			return
+		end
+		local mouseDrag = dragInput.UserInputType == Enum.UserInputType.MouseButton1
+			and input.UserInputType == Enum.UserInputType.MouseMovement
+		if input ~= dragInput and not mouseDrag then
+			return
+		end
+		local d = input.Position - dragStart
+		winTarget = clampPos(startTarget + Vector2.new(d.X, d.Y))
+	end))
+
+	table.insert(dragConns, UserInputService.InputEnded:Connect(function(input)
+		if not dragging or not dragInput then
+			return
+		end
+		if input == dragInput
+			or (dragInput.UserInputType == Enum.UserInputType.MouseButton1
+				and input.UserInputType == Enum.UserInputType.MouseButton1)
+		then
+			endDrag()
+		end
+	end))
+
+	table.insert(dragConns, UserInputService.WindowFocusReleased:Connect(endDrag))
+
+	root.Destroying:Connect(function()
+		stopStep()
+		for _, c in ipairs(dragConns) do
+			c:Disconnect()
+		end
+	end)
 
 	task.spawn(function()
 		if SHOW_INTRO then
