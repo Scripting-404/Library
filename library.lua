@@ -1,20 +1,3 @@
---[[
-	Ophyn Key System library (single-file bundle)
-
-	Changes vs the previous bundle:
-	  * utilities/panda fixed (CheckKey was pasted inside itself, so nothing compiled)
-	  * shared utilities/http helper (request lookup + download/loadstring) used everywhere
-	  * Lucide pack cached on disk
-	  * invalid saved keys are deleted, Enter submits, 5 wrong keys = 30s lockout
-	  * GUI mounts via gethui/CoreGui/PlayerGui and replaces a duplicate window
-	  * get-key dropdown closes on outside click
-	  * theme/font/gradient bindings are released when the window is destroyed
-	  * removed dead modules (window/dialog, nothing.com/yeahnothing), renamed AirflowBlur
-	  * multi-function build: Tabs and Versions (Chrome-style cards inside a Tab, each with its own
-	    feature list + Back button) share Button, Toggle, Slider, Input, Dropdown, Keybind, Label,
-	    Divider, Custom, Section, Paragraph; Window:Notify and Window.Flags added
-]]
-
 local __modules = {}
 local __cache = {}
 
@@ -33,10 +16,9 @@ local function import(path)
 end
 
 __modules["utilities/http"] = function()
-	-- One place for "which HTTP function does this executor have" and "download + loadstring".
 	local Http = {}
 
-	local remoteCache = {} -- url -> loaded library
+	local remoteCache = {}
 
 	function Http.request()
 		return request
@@ -46,7 +28,6 @@ __modules["utilities/http"] = function()
 			or (fluxus and fluxus.request)
 	end
 
-	-- GET with optional retries. Returns body, or nil + reason.
 	function Http.get(url, retries)
 		local lastErr = "request failed"
 		for attempt = 0, retries or 0 do
@@ -80,8 +61,6 @@ __modules["utilities/http"] = function()
 		return nil, lastErr
 	end
 
-	-- Downloads a Lua file, runs it and returns whatever it returns.
-	-- Cached per url unless `fresh` is true. Returns lib, or nil + reason.
 	function Http.loadRemote(url, retries, fresh)
 		if not fresh and remoteCache[url] ~= nil then
 			return remoteCache[url]
@@ -115,7 +94,6 @@ __modules["utilities/http"] = function()
 end
 
 __modules["images/images"] = function()
-	-- All Roblox asset IDs (images, icons, and font) used by the UI.
 	local Images = {
 		FONT = "rbxassetid://12187365364",
 		KEY = "rbxassetid://96510194465420",
@@ -136,57 +114,45 @@ end
 
 __modules["variables"] = function()
 	return {
-		-- Window Config
 		Title = "Ophyn",
 		Description = "Key System",
-		Logo = "rbxassetid://111673746737789", -- rbxassetid
+		Logo = "rbxassetid://111673746737789",
 		Theme = "Plant-Dark",
 		Folder = "Ophyn-KSY",
 
-		-- Buttons Config
 		getkey = true,
 
-		-- Intro Config
-		Intro = "true", -- "false": fade-in on open, fade-out on close
-		startintro_size = 80, -- initial square size
+		Intro = "true",
+		startintro_size = 80,
 		squareintro_time = 1.2,
-		squarecontorn = "true", -- "false": removes the outline around the intro square
+		squarecontorn = "true",
 
-		-- Themes Config
 		Changelogocolor = true,
 		Changeiconscolor = true,
-		ChangeTheme = "true", -- "false": disable moon icon to change Theme
+		ChangeTheme = "true",
 
-		-- Section Config
 		discord_link = "",
 		website_link = "",
 
-		-- Cards ("true" / "false")
 		Discord = "true",
 		Website = "false",
 		Informations = "true",
 
-		-- Keyless mode: no key needed. Status becomes "Keyless" and Submit runs the Callback directly.
 		Keyless = {
-			enabled = false, -- true: turns keyless mode on
-			disabletextbox = true, -- dims the key box and blocks typing
-			disablegetkey = true, -- dims "Get a key" and blocks clicks
-			showcard = true, -- shows the "Keyless Mode" card
-			autoconfirm = false, -- true: runs the Callback automatically when the UI opens
+			enabled = false,
+			disabletextbox = true,
+			disablegetkey = true,
+			showcard = true,
+			autoconfirm = false,
 		},
 
-		-- Notification style
 		NotifStyle = "1",
 
-		-- Tabs style: "1" = Tabs in a column on the left, "2" = Tabs in a row under the topbar
 		TabsStyle = "1",
 
-		-- Games
 		SupportedGames = {},
 
-		-- Script Execution
 		Callback = function(key)
-			-- your script here
 		end,
 	}
 end
@@ -223,8 +189,6 @@ __modules["utilities/jnkie"] = function()
 		if self.client then
 			return self.client
 		end
-		-- fresh = true: every instance gets its own library table, because we set
-		-- service/identifier/provider on it below
 		local lib, err = Http.loadRemote(SDK_URL, 1, true)
 		if not lib then
 			self.loadError = err
@@ -298,14 +262,6 @@ __modules["utilities/jnkie"] = function()
 end
 
 __modules["utilities/lucide"] = function()
-	-- Lucide icon support, backed by https://github.com/Footagesus/Icons (lucide/dist/Icons.lua).
-	--
-	-- Anywhere the UI takes an `Icon`, you can pass a Lucide name instead of an asset id:
-	--   Tab:Section({ Title = "Main", Icon = "house" })
-	--   Tab:Section({ Title = "Main", Icon = "lucide:house" }) -- same thing, explicit prefix
-	--
-	-- The pack is only downloaded the first time a Lucide name is used. It is then cached on
-	-- disk (when the executor has readfile/writefile) so later runs don't wait for the network.
 
 	local Http = import("utilities/http")
 
@@ -374,7 +330,6 @@ __modules["utilities/lucide"] = function()
 				error("loadstring is not available")
 			end
 
-			-- 1) disk cache
 			local cached = readCache()
 			if cached then
 				local okParse, parsed = pcall(parsePack, cached)
@@ -383,7 +338,6 @@ __modules["utilities/lucide"] = function()
 				end
 			end
 
-			-- 2) network
 			local body, err = Http.get(PACK_URL, 1)
 			if not body then
 				error("could not download the icon pack: " .. tostring(err))
@@ -405,7 +359,6 @@ __modules["utilities/lucide"] = function()
 		return pack
 	end
 
-	-- "rbxassetid://123" / 123 / "123" -> "rbxassetid://123"; anything else string-like is kept
 	local function toAsset(value)
 		if type(value) == "number" then
 			return "rbxassetid://" .. tostring(math.floor(value))
@@ -416,16 +369,15 @@ __modules["utilities/lucide"] = function()
 		return value
 	end
 
-	-- true when `value` should be looked up in the Lucide pack (instead of used as an asset id)
 	function Lucide.isName(value)
 		if type(value) ~= "string" or value == "" then
 			return false
 		end
 		if value:match("^%d+$") then
-			return false -- bare asset id
+			return false
 		end
 		if value:match("^rbx%a*://") or value:match("^https?://") then
-			return false -- rbxassetid:// / rbxthumb:// / rbxasset:// / urls
+			return false
 		end
 		return true
 	end
@@ -449,8 +401,6 @@ __modules["utilities/lucide"] = function()
 		end)
 	end
 
-	-- Returns { Image = "rbxassetid://...", RectSize = Vector2, RectOffset = Vector2 }
-	-- or nil when the name is unknown (or the pack could not be loaded).
 	function Lucide.resolve(value)
 		if not Lucide.isName(value) then
 			return nil
@@ -489,8 +439,6 @@ __modules["utilities/lucide"] = function()
 		}
 	end
 
-	-- Points an ImageLabel/ImageButton at `value`, which can be a Lucide name or an asset id.
-	-- Always resets the sprite rect, so an icon can be swapped between the two kinds safely.
 	function Lucide.apply(label, value)
 		local sprite = Lucide.resolve(value)
 		if sprite then
@@ -503,7 +451,7 @@ __modules["utilities/lucide"] = function()
 		label.ImageRectSize = Vector2.new(0, 0)
 		label.ImageRectOffset = Vector2.new(0, 0)
 		if Lucide.isName(value) then
-			label.Image = "" -- a Lucide name that could not be resolved: draw nothing
+			label.Image = ""
 			return false
 		end
 		label.Image = value or ""
@@ -514,14 +462,11 @@ __modules["utilities/lucide"] = function()
 end
 
 __modules["utilities/panda"] = function()
-	-- PandaAuth v4 adapter.
 	local Http = import("utilities/http")
 
 	local LIB_URL = "https://secure.pandauth.com/pv4/lib"
 
 	local REASONS = {
-		-- Not "invalid or expired": the Information card counts any reason containing "expir"
-		-- as an expired key, so wrong keys would inflate that number.
 		INVALID_KEY = "key is invalid.",
 		RATE_LIMITED = "you are being rate limited, please wait a moment and try again.",
 		NETWORK = "network error, please try again.",
@@ -546,7 +491,6 @@ __modules["utilities/panda"] = function()
 		self.lib = nil
 		self.loading = false
 
-		-- filled after a successful check
 		self.isPremium = nil
 		self.expiry = nil
 		self.expiryUnix = nil
@@ -559,7 +503,6 @@ __modules["utilities/panda"] = function()
 		return self
 	end
 
-	-- Downloads + configures the Panda library once. Returns lib, or nil + reason.
 	function Panda:_load()
 		if self.lib then
 			return self.lib
@@ -578,7 +521,6 @@ __modules["utilities/panda"] = function()
 		self.loading = true
 		local lib, err
 		local ok, thrown = pcall(function()
-			-- fresh = true: configure() below is per-instance (serviceId), don't share the table
 			local result, loadErr = Http.loadRemote(LIB_URL, 1, true)
 			if not result then
 				err = "couldn't load the Panda library: " .. tostring(loadErr)
@@ -600,7 +542,7 @@ __modules["utilities/panda"] = function()
 			end
 			lib = result
 		end)
-		self.loading = false -- always reset, even if something above threw
+		self.loading = false
 
 		if not ok then
 			return nil, tostring(thrown)
@@ -612,7 +554,6 @@ __modules["utilities/panda"] = function()
 		return nil, err
 	end
 
-	-- Returns valid (boolean), reason (string when invalid)
 	function Panda:CheckKey(key)
 		key = tostring(key or ""):match("^%s*(.-)%s*$")
 		if key == "" then
@@ -624,7 +565,6 @@ __modules["utilities/panda"] = function()
 			return false, err
 		end
 
-		-- Preferred (PandaAuth v4): validateEx -> success, reason, isPremium
 		if type(lib.validateEx) == "function" then
 			local ok, success, reason, isPremium = pcall(lib.validateEx, key)
 			if not ok then
@@ -637,7 +577,6 @@ __modules["utilities/panda"] = function()
 			return false, REASONS[reason] or tostring(reason or "key is invalid.")
 		end
 
-		-- Fallback: validate -> table | boolean
 		if type(lib.validate) == "function" then
 			local ok, result = pcall(lib.validate, key)
 			if not ok then
@@ -692,7 +631,6 @@ __modules["utilities/platoboost"] = function()
 	local Players = game:GetService("Players")
 	local Http = import("utilities/http")
 
-	-- SHA-256 (hex digest) from the official Platoboost library.
 	local sha256 = (function()
 local a=2^32;local b=a-1;local function c(d,e)local f,g=0,1;while d~=0 or e~=0 do local h,i=d%2,e%2;local j=(h+i)%2;f=f+j*g;d=math.floor(d/2)e=math.floor(e/2)g=g*2 end;return f%a end;local function k(d,e,l,...)local m;if e then d=d%a;e=e%a;m=c(d,e)if l then m=k(m,l,...)end;return m elseif d then return d%a else return 0 end end;local function n(d,e,l,...)local m;if e then d=d%a;e=e%a;m=(d+e-c(d,e))/2;if l then m=n(m,l,...)end;return m elseif d then return d%a else return b end end;local function o(p)return b-p end;local function q(d,r)if r<0 then return lshift(d,-r)end;return math.floor(d%2^32/2^r)end;local function s(p,r)if r>31 or r<-31 then return 0 end;return q(p%a,r)end;local function lshift(d,r)if r<0 then return s(d,-r)end;return d*2^r%2^32 end;local function t(p,r)p=p%a;r=r%32;local u=n(p,2^r-1)return s(p,r)+lshift(u,32-r)end;local v={0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2}local function w(x)return string.gsub(x,".",function(l)return string.format("%02x",string.byte(l))end)end;local function y(z,A)local x=""for B=1,A do local C=z%256;x=string.char(C)..x;z=(z-C)/256 end;return x end;local function D(x,B)local A=0;for B=B,B+3 do A=A*256+string.byte(x,B)end;return A end;local function E(F,G)local H=64-(G+9)%64;G=y(8*G,8)F=F.."\128"..string.rep("\0",H)..G;assert(#F%64==0)return F end;local function I(J)J[1]=0x6a09e667;J[2]=0xbb67ae85;J[3]=0x3c6ef372;J[4]=0xa54ff53a;J[5]=0x510e527f;J[6]=0x9b05688c;J[7]=0x1f83d9ab;J[8]=0x5be0cd19;return J end;local function K(F,B,J)local L={}for M=1,16 do L[M]=D(F,B+(M-1)*4)end;for M=17,64 do local N=L[M-15]local O=k(t(N,7),t(N,18),s(N,3))N=L[M-2]L[M]=(L[M-16]+O+L[M-7]+k(t(N,17),t(N,19),s(N,10)))%a end;local d,e,l,P,Q,R,S,T=J[1],J[2],J[3],J[4],J[5],J[6],J[7],J[8]for B=1,64 do local O=k(t(d,2),t(d,13),t(d,22))local U=k(n(d,e),n(d,l),n(e,l))local V=(O+U)%a;local W=k(t(Q,6),t(Q,11),t(Q,25))local X=k(n(Q,R),n(o(Q),S))local Y=(T+W+X+v[B]+L[B])%a;T=S;S=R;R=Q;Q=(P+Y)%a;P=l;l=e;e=d;d=(Y+V)%a end;J[1]=(J[1]+d)%a;J[2]=(J[2]+e)%a;J[3]=(J[3]+l)%a;J[4]=(J[4]+P)%a;J[5]=(J[5]+Q)%a;J[6]=(J[6]+R)%a;J[7]=(J[7]+S)%a;J[8]=(J[8]+T)%a end;local function Z(F)F=E(F,#F)local J=I({})for B=1,#F,64 do K(F,B,J)end;return w(y(J[1],4)..y(J[2],4)..y(J[3],4)..y(J[4],4)..y(J[5],4)..y(J[6],4)..y(J[7],4)..y(J[8],4))end;
 		return Z
@@ -701,7 +639,6 @@ local a=2^32;local b=a-1;local function c(d,e)local f,g=0,1;while d~=0 or e~=0 d
 	local Platoboost = {}
 	Platoboost.__index = Platoboost
 
-	-- Tried in this order; the first one that answers is used.
 	local HOSTS = { "https://api.platoboost.app", "https://api.platoboost.com", "https://api.platoboost.net" }
 	local LINK_CACHE_TIME = 10 * 60
 	local RATE_LIMIT_MESSAGE = "you are being rate limited, please wait 20 seconds and try again."
@@ -752,7 +689,6 @@ local a=2^32;local b=a-1;local function c(d,e)local f,g=0,1;while d~=0 or e~=0 d
 		end
 		self.useNonce = useNonce ~= false
 
-		-- Optional: force one API host, e.g. Host = "https://api.platoboost.app"
 		local host = config.Host or config.host
 		if type(host) == "string" and host ~= "" then
 			host = host:gsub("/+$", "")
@@ -776,8 +712,6 @@ local a=2^32;local b=a-1;local function c(d,e)local f,g=0,1;while d~=0 or e~=0 d
 		return self
 	end
 
-	-- Picks the first host that answers /public/connectivity (200 or 429).
-	-- If none answers, the first one in HOSTS is used.
 	function Platoboost:_host()
 		if self.host then
 			return self.host
@@ -818,7 +752,6 @@ local a=2^32;local b=a-1;local function c(d,e)local f,g=0,1;while d~=0 or e~=0 d
 		return res
 	end
 
-	-- Returns link, or nil + reason
 	function Platoboost:GetKeyLink()
 		if self.cachedLink and self.cachedTime + LINK_CACHE_TIME > os.time() then
 			return self.cachedLink
@@ -856,7 +789,6 @@ local a=2^32;local b=a-1;local function c(d,e)local f,g=0,1;while d~=0 or e~=0 d
 		return nil, "Failed to get link."
 	end
 
-	-- With UseNonce the server signs its answer with the secret; check it.
 	function Platoboost:_integrityOk(data, nonce)
 		if not self.useNonce then
 			return true
@@ -952,14 +884,12 @@ local a=2^32;local b=a-1;local function c(d,e)local f,g=0,1;while d~=0 or e~=0 d
 			return true
 		end
 
-		-- Keys from the Platoboost site start with KEY_ and must be redeemed first
 		if key:sub(1, 4) == "KEY_" then
 			return self:_redeem(key)
 		end
 		return false, "key is invalid."
 	end
 
-	-- Returns valid (boolean), reason (string when invalid)
 	function Platoboost:CheckKey(key)
 		key = tostring(key or ""):match("^%s*(.-)%s*$")
 		if key == "" then
@@ -1005,7 +935,6 @@ local Lighting = game:GetService("Lighting")
 
 local Notification = {}
 
--- NotifStyle: "1" Stripe | "2" Pill | "3" Island | "4" Ring | "5" Solid (names work too)
 local STYLE_BY_NAME = { stripe = "1", pill = "2", island = "3", ring = "4", solid = "5" }
 
 function Notification.new(ctx)
@@ -1048,7 +977,6 @@ function Notification.new(ctx)
 		return C.accent
 	end
 
-	-- Readable icon/text color on top of a filled color
 	local function contrastOn(color)
 		local luminance = 0.299 * color.R + 0.587 * color.G + 0.114 * color.B
 		return luminance > 0.55 and DARK or WHITE
@@ -1058,7 +986,6 @@ function Notification.new(ctx)
 		return NOTIF_COLOR == "bg" and C.card or C.btn2
 	end
 
-	-- Bottom-right stack (Stripe, Pill, Ring, Solid)
 	local cornerHolder = make("Frame", {
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -16, 1, -8),
@@ -1073,7 +1000,6 @@ function Notification.new(ctx)
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
 	}, cornerHolder)
 
-	-- Top-center stack (Island)
 	local islandHolder = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 12),
@@ -1132,8 +1058,6 @@ function Notification.new(ctx)
 		end
 	end)
 
-	-- Shared builders
-
 	local function newWrapper(holder, width, height)
 		return make("Frame", {
 			LayoutOrder = notifCount,
@@ -1161,9 +1085,6 @@ function Notification.new(ctx)
 	local function label(parent, str, x, y, w, h, size, color, bold)
 		local l = text(parent, str, x, y, w, h, size, color)
 		if bold then
-			-- Route through markBoldFont (not a raw FontFace assign) so this label
-			-- is registered as bold in fontBindings; otherwise the next
-			-- SetUIFont/SetTitleFont call flattens it back to the regular weight.
 			markBoldFont(l)
 		end
 		l.TextTruncate = Enum.TextTruncate.AtEnd
@@ -1181,7 +1102,6 @@ function Notification.new(ctx)
 		}, parent)
 	end
 
-	-- 1 Â· Stripe: color bar on the left + countdown line at the bottom
 	local function buildStripe(title, message, color)
 		local W, H = NOTIF_W, 62
 		local wrapper = newWrapper(cornerHolder, W, H)
@@ -1219,7 +1139,6 @@ function Notification.new(ctx)
 		}
 	end
 
-	-- 2 Â· Pill: compact capsule; long text wraps to more lines (never cut)
 	local function escapeRich(str)
 		return (str:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
 	end
@@ -1297,7 +1216,6 @@ function Notification.new(ctx)
 		}
 	end
 
-	-- 3 Â· Island: dark capsule at the top center that expands in
 	local function buildIsland(title, message, color, spec)
 		local W, H = ISLAND_W, 52
 		local border = Color3.fromRGB(42, 42, 48)
@@ -1351,7 +1269,6 @@ function Notification.new(ctx)
 		}
 	end
 
-	-- 4 Â· Ring: icon inside a circular timer
 	local function buildRing(title, message, color, spec)
 		local W, H = NOTIF_W, 60
 		local wrapper = newWrapper(cornerHolder, W, H)
@@ -1402,7 +1319,6 @@ function Notification.new(ctx)
 		}
 	end
 
-	-- 5 Â· Solid: filled with the status color
 	local function buildSolid(title, message, color, spec)
 		local W, H = NOTIF_W, 58
 		local onColor = contrastOn(color)
@@ -1569,43 +1485,6 @@ return Notification
 end
 
 __modules["components/window/pages"] = function()
--- Page 2 of the window. It sits right below the Key System: a down arrow at the bottom
--- of the Key System slides the Key System up and brings this page in (a topbar, the Tabs
--- under it, and the content of the selected Tab: Sections and Paragraphs).
---
---   local OphynWindow = KeySystem.new({ ... })
---
---   local Tab = OphynWindow({ Title = "Main", Icon = "rbxassetid://..." })
---
---   Tab:Section({ Title = "Section", Icon = "rbxassetid://..." })
---
---   -- Tabs style: KeySystem:SetTabsStyle("1") = column on the left (default),
---   --             KeySystem:SetTabsStyle("2") = row right under the topbar.
---
---   -- Every Icon also accepts a Lucide icon name (https://lucide.dev/icons), loaded from
---   -- github.com/Footagesus/Icons the first time one is used:
---   local Tab = OphynWindow({ Title = "Main", Icon = "house" })
---   Tab:Section({ Title = "Section", Icon = "lucide:settings" })
---
---   Tab:Paragraph({
---       Title = "Paragraph",
---       Desc = "Test Paragraph",
---       Color = "Red", -- leave it blank to follow the theme
---       Buttons = { { Icon = "rbxassetid://...", Title = "Button 1", Callback = function() end } },
---   })
---
---   -- Multi-function: Tab:Version({ Title = "v1.0", Icon = "zap", Desc = "..." }) adds a square card to
---   -- the Tab. Clicking it shows that version's own feature list with a Back button.
---   local V1 = Tab:Version({ Title = "v1.0", Icon = "zap", Desc = "Stable features" })
---   V1:Toggle({ Title = "Auto Farm", Default = false, Flag = "autofarm", Callback = function(on) end })
---   V1:Slider({ Title = "Speed", Min = 16, Max = 120, Default = 16, Callback = function(v) end })
---   V1:Dropdown({ Title = "Mode", Options = { "Fast", "Safe" }, Default = "Safe", Callback = function(v) end })
---   V1:Input({ Title = "Name", Placeholder = "type here", Callback = function(text) end })
---   V1:Keybind({ Title = "Toggle UI", Default = Enum.KeyCode.RightShift, Callback = function() end })
---   V1:Button({ Title = "Run", Icon = "play", Callback = function() end })
---   V1:Label("plain text") / V1:Divider() / V1:Custom({ Height = 80, Build = function(frame) end })
---   -- The same elements also work directly on a Tab (Tab:Toggle, Tab:Button, ...).
---   -- OphynWindow:Notify({ Title = "Hi", Desc = "text", Type = "success" }), OphynWindow.Flags.autofarm
 
 local Pages = {}
 
@@ -1626,8 +1505,6 @@ local NAMED_COLORS = {
 	black = Color3.fromRGB(16, 16, 16),
 }
 
--- Accepts a Color3, a color name ("Red", "Blue", ...) or a hex string ("#RRGGBB").
--- Returns nil for anything else, which makes the Paragraph follow the theme.
 local function parseColor(value)
 	if value == nil or value == "" then
 		return nil
@@ -1662,60 +1539,29 @@ function Pages.new(ctx)
 	local SLIDE_TIME = 0.55
 	local Quint = Enum.EasingStyle.Quint
 
-	-- Section title look: a bit bigger than before and slightly see-through
 	local SECTION_TEXT_SIZE = 15
 	local SECTION_TEXT_TRANSPARENCY = 0.35
 
-	-- Switching Tabs: the content rises a few pixels while its elements fade in one after
-	-- the other (the stagger is capped so a Tab with many elements doesn't feel slow)
 	local TAB_SLIDE = 10
 	local TAB_IN_TIME = 0.32
 	local TAB_STAGGER = 0.045
 	local TAB_STAGGER_MAX = 0.4
 
-	-- Both arrows (down: show the Tabs / up: back to the Key System) reuse the Submit
-	-- button's icon. If that icon points right, 90 turns it to point down and -90 up;
-	-- change this if the arrows end up facing the wrong way.
 	local NEXT_ARROW_ROTATION = 90
 	local BACK_ARROW_ROTATION = -NEXT_ARROW_ROTATION
 
-	-- Tabs style 2 (a row under the topbar)
 	local TABS_BAR_H = 34
 	local TAB_H_STYLE2 = 26
 
-	-- Versions: square cards inside a Tab (like Chrome's tab switcher). Two per row.
-	local VERSION_CARD_H = 84
-	local VERSION_GAP = 8
-	local BACK_TEXT = "Back" -- Back button of a Version (override per Version with BackText)
-	local FEATURES_ONE, FEATURES_MANY = "feature", "features"
+	local STRIP_H = 40
+	local CHIP_H = 28
+	local CHIP_NAME_MAX = 92
+	local MARQUEE_SPEED = 28
+	local MARQUEE_PAUSE = 0.7
 
-	-- Window.Flags[name] = current value of every element created with Flag = "name"
 	local flags = {}
 
-	-- false when "Change icons color" is off: icons stay white and are never recolored
 	local tintIcons = type(iconRole("muted")) == "string"
-
-	-- The arrows: the Submit button's icon in one single ImageLabel, rotated on the label
-	-- itself (not on a parent frame) and placed with plain offsets, so it renders right
-	-- from the first frame. `drop` pushes it down a few pixels inside its button.
-	local function arrowIcon(parent, rotation, drop)
-		local img = make("ImageLabel", {
-			Name = "ArrowIcon",
-			Position = UDim2.new(0.5, -8, 0.5, -8 + (drop or 0)),
-			Size = UDim2.new(0, 16, 0, 16),
-			BackgroundTransparency = 1,
-			Image = Images.SUBMIT,
-			ImageColor3 = iconRole("muted"),
-			Rotation = rotation,
-			ZIndex = 6,
-		}, parent)
-		task.spawn(function()
-			pcall(function()
-				game:GetService("ContentProvider"):PreloadAsync({ img })
-			end)
-		end)
-		return img
-	end
 
 	local function tintArrow(img, color)
 		if tintIcons then
@@ -1733,20 +1579,16 @@ function Pages.new(ctx)
 		}, parent)
 	end
 
-	---------------------------------------------------------------------------
-	-- The page itself: starts one window-height below, hidden
-	---------------------------------------------------------------------------
 	local page = make("Frame", {
 		Name = "Page2",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, H),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = UDim2.new(0, W, 0, H),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
 	}, canvas)
 
-	-- Topbar: logo + title on the left, back arrow + close on the right
 	local topbar = make("Frame", {
 		Name = "Topbar",
 		Size = UDim2.new(0, W, 0, TOPBAR_H),
@@ -1765,7 +1607,7 @@ function Pages.new(ctx)
 
 	local pageTitle = make("TextLabel", {
 		Position = UDim2.new(0, 46, 0, 0),
-		Size = UDim2.new(0, W - 46 - 84, 1, 0),
+		Size = UDim2.new(0, W - 46 - 52, 1, 0),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Text = ctx.title,
@@ -1806,9 +1648,6 @@ function Pages.new(ctx)
 		ZIndex = 6,
 	}, closeBtn)
 
-	local backBtn = topButton(40)
-	local backIcon = arrowIcon(backBtn, BACK_ARROW_ROTATION, 0)
-
 	closeBtn.MouseEnter:Connect(function()
 		tween(closeBtn, 0.15, { BackgroundTransparency = 0 })
 		if tintIcons then
@@ -1821,16 +1660,7 @@ function Pages.new(ctx)
 			tween(closeIcon, 0.15, { ImageColor3 = C.muted })
 		end
 	end)
-	backBtn.MouseEnter:Connect(function()
-		tween(backBtn, 0.15, { BackgroundTransparency = 0 })
-		tintArrow(backIcon, C.text)
-	end)
-	backBtn.MouseLeave:Connect(function()
-		tween(backBtn, 0.15, { BackgroundTransparency = 1 })
-		tintArrow(backIcon, C.muted)
-	end)
 
-	-- Tabs style: "1" = column on the left, "2" = row right under the topbar
 	local tabsStyle = "1"
 	local function normalizeStyle(value)
 		value = tostring(value or "1"):lower()
@@ -1843,12 +1673,10 @@ function Pages.new(ctx)
 		tabsStyle = normalizeStyle(ctx.getTabsStyle())
 	end
 
-	-- Style 1 draws the line under the topbar; style 2 draws it under the row of Tabs
 	local topLine = line(page, 14, TOPBAR_H, W - 28, 1)
 	local tabsLine = line(page, 14, TOPBAR_H + TABS_BAR_H, W - 28, 1)
 	local sideLine = line(page, SIDE_W, TOPBAR_H + 10, 1, H - TOPBAR_H - 20)
 
-	-- Tabs (a column in style 1, a row in style 2)
 	local sidebar = make("ScrollingFrame", {
 		Name = "Tabs",
 		BackgroundTransparency = 1,
@@ -1863,7 +1691,6 @@ function Pages.new(ctx)
 	}, sidebar)
 	local sidePadding = make("UIPadding", {}, sidebar)
 
-	-- Where the selected Tab's content shows up
 	local holder = make("Frame", {
 		Name = "TabContent",
 		BackgroundTransparency = 1,
@@ -1871,7 +1698,6 @@ function Pages.new(ctx)
 		ClipsDescendants = true,
 	}, page)
 
-	-- mouse wheel scrolls the row sideways in style 2
 	sidebar.InputChanged:Connect(function(input)
 		if tabsStyle == "2" and input.UserInputType == Enum.UserInputType.MouseWheel then
 			local maxX = math.max(0, sidebar.AbsoluteCanvasSize.X - sidebar.AbsoluteWindowSize.X)
@@ -1931,46 +1757,8 @@ function Pages.new(ctx)
 		end
 	end
 
-	---------------------------------------------------------------------------
-	-- Sliding between the Key System and this page
-	---------------------------------------------------------------------------
-	local opened, moving = false, false
+	local opened = false
 
-	local function open()
-		if opened or moving then
-			return
-		end
-		opened, moving = true, true
-		if ctx.onOpen then
-			ctx.onOpen()
-		end
-		if current then
-			current.refresh()
-		end
-		page.Visible = true
-		tween(page, SLIDE_TIME, { Position = UDim2.new(0.5, 0, 0.5, 0) }, Quint)
-		tween(content, SLIDE_TIME, { Position = UDim2.new(0.5, 0, 0.5, -H) }, Quint)
-		task.delay(SLIDE_TIME + 0.05, function()
-			moving = false
-		end)
-	end
-
-	local function back()
-		if not opened or moving then
-			return
-		end
-		opened, moving = false, true
-		tween(page, SLIDE_TIME, { Position = UDim2.new(0.5, 0, 0.5, H) }, Quint)
-		tween(content, SLIDE_TIME, { Position = UDim2.new(0.5, 0, 0.5, 0) }, Quint)
-		task.delay(SLIDE_TIME + 0.05, function()
-			if not opened then
-				page.Visible = false
-			end
-			moving = false
-		end)
-	end
-
-	-- Used when the whole UI closes while this page is showing
 	local function fadeOut(time)
 		if not page.Visible then
 			return
@@ -1981,50 +1769,10 @@ function Pages.new(ctx)
 		end)
 	end
 
-	-- The down arrow, in the middle of the bottom of the Key System. It only shows up
-	-- once there is at least one Tab, so a script that never creates one doesn't end up
-	-- with an arrow that leads to an empty page.
-	local nextBtn = make("TextButton", {
-		Name = "NextPage",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0, W / 2, 0, H - 2),
-		Size = UDim2.new(0, 40, 0, 20),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		AutoButtonColor = false,
-		Text = "",
-		Visible = false,
-		ZIndex = 5,
-	}, content)
-	-- Same icon as the Submit button (Images.SUBMIT), turned to point down
-	local nextIcon = arrowIcon(nextBtn, NEXT_ARROW_ROTATION, 2)
-
-	nextBtn.MouseEnter:Connect(function()
-		tintArrow(nextIcon, C.text)
-	end)
-	nextBtn.MouseLeave:Connect(function()
-		tintArrow(nextIcon, C.muted)
-	end)
-	nextBtn.MouseButton1Click:Connect(function()
-		if not state.ready or state.closing then
-			return
-		end
-		open()
-	end)
-
-	backBtn.MouseButton1Click:Connect(function()
-		if not state.ready or state.closing then
-			return
-		end
-		back()
-	end)
 	closeBtn.MouseButton1Click:Connect(function()
 		ctx.requestClose()
 	end)
 
-	---------------------------------------------------------------------------
-	-- Tabs
-	---------------------------------------------------------------------------
 	local function styleTab(tab, on)
 		tween(tab.btn, 0.15, { BackgroundTransparency = on and 0 or 1 })
 		setRole(tab.label, "TextColor3", on and "text" or "muted")
@@ -2034,16 +1782,9 @@ function Pages.new(ctx)
 				setRole(tab.iconImage, "ImageColor3", role)
 			end
 		end
-		-- a Tab showing one of its Versions keeps the grid hidden and that Version visible
-		tab.scroll.Visible = on and not tab.activeVersion
-		if tab.activeVersion then
-			tab.activeVersion.view.Visible = on
-		end
+		tab.page.Visible = on
 	end
 
-	-- originals[inst][prop] = the resting transparency of that property, captured only once.
-	-- Switching Tabs quickly (while an animation is still running) then never records a
-	-- half-faded value as the "normal" one.
 	local originals = setmetatable({}, { __mode = "k" })
 
 	local function snapshot(child)
@@ -2063,8 +1804,6 @@ function Pages.new(ctx)
 		return items
 	end
 
-	-- Plays when a Tab becomes the selected one: the whole content rises a little and
-	-- every element (Section / Paragraph) fades in, one after the other.
 	local function animateIn(tab, target)
 		tab.animId = (tab.animId or 0) + 1
 		local id = tab.animId
@@ -2086,7 +1825,7 @@ function Pages.new(ctx)
 		local lists = {}
 		for i, child in ipairs(children) do
 			local items = snapshot(child)
-			fade(items, 0) -- start fully transparent
+			fade(items, 0)
 			lists[i] = items
 		end
 
@@ -2097,7 +1836,7 @@ function Pages.new(ctx)
 		for i, items in ipairs(lists) do
 			task.delay((i - 1) * step, function()
 				if tab.animId ~= id then
-					return -- a newer animation took over this Tab
+					return
 				end
 				fade(items, 1, TAB_IN_TIME)
 			end)
@@ -2113,17 +1852,15 @@ function Pages.new(ctx)
 		end
 		current = tab
 		styleTab(tab, true)
+		if tab.ensureVersion then
+			tab.ensureVersion()
+		end
 		tab.refresh()
 		if animate ~= false and (opened or page.Visible) then
-			animateIn(tab)
+			animateIn(tab, tab.activeVersion and tab.activeVersion.scroll or tab.scroll)
 		end
 	end
 
-	---------------------------------------------------------------------------
-	-- Elements: Section, Paragraph, Label, Divider, Button, Toggle, Slider, Input,
-	-- Dropdown, Keybind, Custom. One builder serves a Tab and every Version inside a
-	-- Tab, so both expose exactly the same methods.
-	---------------------------------------------------------------------------
 	local UserInputService = game:GetService("UserInputService")
 
 	local function runCallback(fn, ...)
@@ -2139,8 +1876,6 @@ function Pages.new(ctx)
 		end)
 	end
 
-	-- Animates a color property to a theme role, then binds it to that role again so the
-	-- next theme switch still recolors it. A newer call cancels the older one's rebind.
 	local recolorTokens = setmetatable({}, { __mode = "k" })
 	local function recolor(inst, prop, role, animate)
 		local tokens = recolorTokens[inst]
@@ -2180,7 +1915,6 @@ function Pages.new(ctx)
 			end
 		end
 
-		-- The card every interactive element sits on
 		local function newCard(class, extra)
 			local props = {
 				Name = "Element",
@@ -2202,7 +1936,6 @@ function Pages.new(ctx)
 			return row
 		end
 
-		-- Title (+ optional Desc) on the left of a card
 		local function head(row, p, opts)
 			opts = opts or {}
 			local x = 12 + (opts.left or 0)
@@ -2257,7 +1990,6 @@ function Pages.new(ctx)
 			return h
 		end
 
-		-- Methods every element shares
 		local function elementApi(row, hd, resize)
 			local el = { Frame = row }
 			function el:SetTitle(str)
@@ -2277,7 +2009,6 @@ function Pages.new(ctx)
 			return el
 		end
 
-		-- Tab:Section({ Title = "...", Icon = "..." }): the icon comes first, then the text
 		function obj:Section(p)
 			p = type(p) == "table" and p or {}
 			local sectionImage = assetId(p.Icon)
@@ -2327,10 +2058,9 @@ function Pages.new(ctx)
 			return section
 		end
 
-		-- Tab:Paragraph({ Title, Desc, Color, Buttons = { { Icon, Title, Callback } } })
 		function obj:Paragraph(p)
 			p = type(p) == "table" and p or {}
-			local color = parseColor(p.Color) -- nil: follows the theme
+			local color = parseColor(p.Color)
 			local onColor = color and contrastOn(color) or nil
 
 			local box = make("Frame", {
@@ -2420,7 +2150,6 @@ function Pages.new(ctx)
 							SortOrder = Enum.SortOrder.LayoutOrder,
 						}, btn)
 
-						-- icon first, then the text
 						local buttonImage = assetId(b.Icon)
 						if buttonImage then
 							local iconHolder = icon(btn, 0, 0, onColor or "text", buttonImage)
@@ -2486,8 +2215,6 @@ function Pages.new(ctx)
 			return paragraph
 		end
 
-
-		-- Tab:Label("text") / Tab:Label({ Text = "..." }): plain wrapped text, no card
 		function obj:Label(p)
 			p = type(p) == "table" and p or { Text = p }
 			local label = make("TextLabel", {
@@ -2517,7 +2244,6 @@ function Pages.new(ctx)
 			return el
 		end
 
-		-- Tab:Divider(): a thin line between groups of elements
 		function obj:Divider()
 			local holder = make("Frame", {
 				Name = "Divider",
@@ -2539,8 +2265,6 @@ function Pages.new(ctx)
 			return el
 		end
 
-		-- Tab:Custom({ Height = 100, Card = false, Build = function(frame) ... end })
-		-- An empty frame in the Tab for your own Roblox instances.
 		function obj:Custom(p)
 			p = type(p) == "table" and p or {}
 			local frame = make("Frame", {
@@ -2573,7 +2297,6 @@ function Pages.new(ctx)
 			return el
 		end
 
-		-- Tab:Button({ Title, Desc, Icon, Callback = function() end })
 		function obj:Button(p)
 			p = type(p) == "table" and p or { Title = p }
 			feature()
@@ -2623,7 +2346,6 @@ function Pages.new(ctx)
 			return el
 		end
 
-		-- Tab:Toggle({ Title, Desc, Default = false, Flag = "name", Callback = function(value) end })
 		function obj:Toggle(p)
 			p = type(p) == "table" and p or { Title = p }
 			feature()
@@ -2698,8 +2420,6 @@ function Pages.new(ctx)
 			return el
 		end
 
-		-- Tab:Slider({ Title, Desc, Min = 0, Max = 100, Default = 50, Step = 1, Suffix = "",
-		--              Flag = "name", Callback = function(value) end })
 		function obj:Slider(p)
 			p = type(p) == "table" and p or { Title = p }
 			feature()
@@ -2861,8 +2581,6 @@ function Pages.new(ctx)
 			return el
 		end
 
-		-- Tab:Input({ Title, Desc, Default = "", Placeholder = "...", Numeric = false,
-		--             ClearOnFocus = false, Flag = "name", Callback = function(text, enter) end })
 		function obj:Input(p)
 			p = type(p) == "table" and p or { Title = p }
 			feature()
@@ -2924,9 +2642,6 @@ function Pages.new(ctx)
 			return el
 		end
 
-		-- Tab:Dropdown({ Title, Desc, Options = { "A", "B" }, Default = "A", Multi = false,
-		--                Placeholder = "Select", Flag = "name", Callback = function(value) end })
-		-- Multi = true: Default is a table and Callback receives a table.
 		function obj:Dropdown(p)
 			p = type(p) == "table" and p or { Title = p }
 			feature()
@@ -3180,9 +2895,6 @@ function Pages.new(ctx)
 			return el
 		end
 
-		-- Tab:Keybind({ Title, Desc, Default = Enum.KeyCode.F, Flag = "name",
-		--               Callback = function(key) end,   -- runs when the key is pressed
-		--               Changed = function(key) end })   -- runs when the user picks a new key
 		function obj:Keybind(p)
 			p = type(p) == "table" and p or { Title = p }
 			feature()
@@ -3262,7 +2974,6 @@ function Pages.new(ctx)
 				if listening then
 					listening = false
 					if input.KeyCode == Enum.KeyCode.Escape then
-						-- cancel: keep the old key
 					elseif input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Delete then
 						key = nil
 						setFlag(p, key)
@@ -3300,7 +3011,6 @@ function Pages.new(ctx)
 		end
 	end
 
-	-- OphynWindow({ Title = "...", Icon = "..." }) -> Tab
 	local function createTab(props)
 		if type(props) ~= "table" then
 			props = { Title = props }
@@ -3308,11 +3018,8 @@ function Pages.new(ctx)
 		local title = props.Title ~= nil and tostring(props.Title) or "Tab"
 		local image = assetId(props.Icon)
 
-		local tab = {}
+		local tab = { versions = {} }
 
-		-- Tab button: the icon comes first, then the text. The icon + text live in `inner`
-		-- (it holds the layout and the side padding, so the button can size itself to the
-		-- text in style 2).
 		tab.btn = make("TextButton", {
 			Name = "Tab",
 			Size = UDim2.new(1, 0, 0, 30),
@@ -3359,7 +3066,6 @@ function Pages.new(ctx)
 			LayoutOrder = 2,
 		}, tab.inner)
 
-		-- Lays the button out for the current Tabs style (also runs when the style changes)
 		tab.applyStyle = function()
 			if tabsStyle == "2" then
 				tab.btn.Size = UDim2.new(0, 0, 0, TAB_H_STYLE2)
@@ -3383,7 +3089,22 @@ function Pages.new(ctx)
 		end
 		tab.applyStyle()
 
-		-- The content of this Tab
+		tab.page = make("Frame", {
+			Name = "TabPage",
+			Size = UDim2.new(1, 0, 1, 0),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Visible = false,
+		}, holder)
+
+		tab.area = make("Frame", {
+			Name = "TabArea",
+			Size = UDim2.new(1, 0, 1, 0),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ClipsDescendants = true,
+		}, tab.page)
+
 		tab.scroll = make("ScrollingFrame", {
 			Name = "TabContent",
 			Size = UDim2.new(1, 0, 1, 0),
@@ -3395,8 +3116,7 @@ function Pages.new(ctx)
 			VerticalScrollBarInset = Enum.ScrollBarInset.None,
 			ScrollBarThickness = 2,
 			ScrollBarImageTransparency = 0.45,
-			Visible = false,
-		}, holder)
+		}, tab.area)
 		setRole(tab.scroll, "ScrollBarImageColor3", "muted")
 
 		local layout = make("UIListLayout", {
@@ -3418,6 +3138,15 @@ function Pages.new(ctx)
 		end
 		layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(tab.refresh)
 
+		tab.hasDirect = function()
+			for _, child in ipairs(tab.scroll:GetChildren()) do
+				if child:IsA("GuiObject") then
+					return true
+				end
+			end
+			return false
+		end
+
 		tab.btn.MouseEnter:Connect(function()
 			if current ~= tab then
 				tween(tab.btn, 0.12, { BackgroundTransparency = 0.5 })
@@ -3432,27 +3161,14 @@ function Pages.new(ctx)
 			if state.closing then
 				return
 			end
-			if current == tab and tab.activeVersion and tab.closeVersion then
-				tab.closeVersion()
-				return
-			end
 			selectTab(tab)
 		end)
 
 		tabs[#tabs + 1] = tab
-		if not nextBtn.Visible then
-			nextBtn.Visible = true
-			-- first time the arrow shows up: make the engine request/draw its image again
-			task.defer(function()
-				nextIcon.Image = ""
-				nextIcon.Image = Images.SUBMIT
-			end)
-		end
 		if not current then
 			selectTab(tab, false)
 		end
 
-		-- Tab:Section / Tab:Paragraph
 		local order = 0
 		local function nextOrder()
 			order = order + 1
@@ -3468,22 +3184,70 @@ function Pages.new(ctx)
 
 		attachElements(obj, tab.scroll, nextOrder)
 
-		-- Tab:Version({ Title, Icon, Desc, BackText }) -> Version
-		-- A square card (like a Chrome tab in the tab switcher) showing the version's icon and
-		-- name. Clicking it swaps the Tab's content for that version's own feature list, with
-		-- a Back button on top. A Version has the very same elements as a Tab.
-		local versionGrid = nil
+		local strip = nil
 		local versionCount = 0
 
-		local function openVersion(v)
+		local function ensureStrip()
+			if strip then
+				return strip
+			end
+			strip = make("ScrollingFrame", {
+				Name = "Versions",
+				Size = UDim2.new(1, 0, 0, STRIP_H),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				CanvasSize = UDim2.new(0, 0, 0, 0),
+				AutomaticCanvasSize = Enum.AutomaticSize.X,
+				ScrollingDirection = Enum.ScrollingDirection.X,
+				ElasticBehavior = Enum.ElasticBehavior.Never,
+				ScrollBarThickness = 0,
+			}, tab.page)
+			make("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				Padding = UDim.new(0, 6),
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}, strip)
+			make("UIPadding", {
+				PaddingLeft = UDim.new(0, 12),
+				PaddingRight = UDim.new(0, 12),
+			}, strip)
+			make("Frame", {
+				Name = "StripLine",
+				Position = UDim2.new(0, 12, 0, STRIP_H),
+				Size = UDim2.new(1, -26, 0, 1),
+				BackgroundColor3 = "stroke",
+				BorderSizePixel = 0,
+			}, tab.page)
+			tab.area.Position = UDim2.new(0, 0, 0, STRIP_H + 1)
+			tab.area.Size = UDim2.new(1, 0, 1, -(STRIP_H + 1))
+			strip.InputChanged:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseWheel then
+					local maxX = math.max(0, strip.AbsoluteCanvasSize.X - strip.AbsoluteWindowSize.X)
+					local x = strip.CanvasPosition.X - input.Position.Z * 30
+					strip.CanvasPosition = Vector2.new(math.clamp(x, 0, maxX), 0)
+				end
+			end)
+			return strip
+		end
+
+		local function openVersion(v, animate)
 			if tab.activeVersion == v or state.closing then
 				return
 			end
+			local previous = tab.activeVersion
 			tab.activeVersion = v
+			if previous then
+				previous.view.Visible = false
+				previous.paint(false, true)
+			end
 			tab.scroll.Visible = false
 			v.view.Visible = true
+			v.paint(true, true)
 			v.refresh()
-			animateIn(tab, v.scroll)
+			if animate ~= false then
+				animateIn(tab, v.scroll)
+			end
 		end
 
 		local function closeVersion()
@@ -3493,11 +3257,18 @@ function Pages.new(ctx)
 			end
 			tab.activeVersion = nil
 			v.view.Visible = false
-			tab.scroll.Visible = current == tab
+			v.paint(false, true)
+			tab.scroll.Visible = true
 			tab.refresh()
 			animateIn(tab, tab.scroll)
 		end
-		tab.closeVersion = closeVersion
+
+		tab.ensureVersion = function()
+			if tab.activeVersion or #tab.versions == 0 or tab.hasDirect() then
+				return
+			end
+			openVersion(tab.versions[1], false)
+		end
 
 		function obj:Version(p)
 			p = type(p) == "table" and p or { Title = p }
@@ -3505,188 +3276,144 @@ function Pages.new(ctx)
 			local vImage = assetId(p.Icon)
 			local vDesc = p.Desc ~= nil and tostring(p.Desc) or ""
 
-			if not versionGrid then
-				versionGrid = make("Frame", {
-					Name = "Versions",
-					Size = UDim2.new(1, 0, 0, 0),
-					AutomaticSize = Enum.AutomaticSize.Y,
-					BackgroundTransparency = 1,
-					BorderSizePixel = 0,
-					LayoutOrder = nextOrder(),
-				}, tab.scroll)
-				make("UIGridLayout", {
-					CellSize = UDim2.new(0.5, -5, 0, VERSION_CARD_H),
-					CellPadding = UDim2.new(0, VERSION_GAP, 0, VERSION_GAP),
-					SortOrder = Enum.SortOrder.LayoutOrder,
-					HorizontalAlignment = Enum.HorizontalAlignment.Left,
-				}, versionGrid)
-			end
+			ensureStrip()
 			versionCount = versionCount + 1
 
-			-- The card in the grid
-			local card = make("TextButton", {
+			local chip = make("TextButton", {
 				Name = "Version",
+				Size = UDim2.new(0, 60, 0, CHIP_H),
 				BackgroundColor3 = "card",
 				BackgroundTransparency = 0,
 				BorderSizePixel = 0,
 				AutoButtonColor = false,
 				Text = "",
 				LayoutOrder = versionCount,
-			}, versionGrid)
-			round(card, 10, "stroke")
-			local cardStroke = card:FindFirstChildOfClass("UIStroke")
+			}, strip)
+			round(chip, 8, "stroke")
+			local chipStroke = chip:FindFirstChildOfClass("UIStroke")
 
+			local inner = make("Frame", {
+				Name = "Inner",
+				Size = UDim2.new(1, 0, 1, 0),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+			}, chip)
+			make("UIPadding", {
+				PaddingLeft = UDim.new(0, 9),
+				PaddingRight = UDim.new(0, 10),
+			}, inner)
+			make("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				Padding = UDim.new(0, 6),
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}, inner)
+
+			local chipIcon = nil
 			if vImage then
-				icon(card, 10, 6, "accent", vImage)
+				local holderIcon = icon(inner, 0, 0, "muted", vImage)
+				holderIcon.LayoutOrder = 1
+				chipIcon = holderIcon:FindFirstChild("iconimage")
 			end
-			local cardTitle = make("TextLabel", {
-				Name = "Title",
-				Position = UDim2.new(0, vImage and 32 or 12, 0, 0),
-				Size = UDim2.new(1, -((vImage and 32 or 12) + 10), 0, 28),
+
+			local nameClip = make("Frame", {
+				Name = "NameClip",
+				Size = UDim2.new(0, 10, 1, 0),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				ClipsDescendants = true,
+				LayoutOrder = 2,
+			}, inner)
+			local nameLabel = make("TextLabel", {
+				Name = "Name",
+				Size = UDim2.new(0, 0, 1, 0),
+				AutomaticSize = Enum.AutomaticSize.X,
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				Text = vTitle,
 				TextSize = 12,
-				TextColor3 = "text",
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextYAlignment = Enum.TextYAlignment.Center,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				FontFace = FONT_BOLD,
-			}, card)
-			make("Frame", {
-				Position = UDim2.new(0, 0, 0, 28),
-				Size = UDim2.new(1, 0, 0, 1),
-				BackgroundColor3 = "stroke",
-				BorderSizePixel = 0,
-			}, card)
-
-			local bodyX = 12
-			if vImage then
-				local big = icon(card, 12, 34, "accent", vImage)
-				big.Size = UDim2.new(0, 26, 0, 26)
-				bodyX = 50
-			end
-			local cardDesc = make("TextLabel", {
-				Name = "Desc",
-				Position = UDim2.new(0, bodyX, 0, 34),
-				Size = UDim2.new(1, -(bodyX + 10), 0, 28),
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				Text = vDesc,
-				TextSize = 11,
 				TextColor3 = "muted",
-				TextWrapped = true,
+				TextWrapped = false,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				TextYAlignment = Enum.TextYAlignment.Top,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				FontFace = FONT,
-			}, card)
-			local countLabel = make("TextLabel", {
-				Name = "Count",
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, 12, 1, -6),
-				Size = UDim2.new(1, -24, 0, 14),
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				Text = "0 " .. FEATURES_MANY,
-				TextSize = 10,
-				TextColor3 = "accent",
-				TextXAlignment = Enum.TextXAlignment.Right,
 				TextYAlignment = Enum.TextYAlignment.Center,
 				FontFace = FONT,
-			}, card)
+			}, nameClip)
 
-			-- The version's own page: a header with the Back button, then its elements
-			local view = make("Frame", {
+			local overflow = 0
+			local marqueeId = 0
+
+			local function runMarquee()
+				marqueeId = marqueeId + 1
+				local id = marqueeId
+				nameLabel.Position = UDim2.new(0, 0, 0, 0)
+				if overflow <= 1 then
+					return
+				end
+				task.spawn(function()
+					while marqueeId == id and chip.Parent do
+						if not (page.Visible and tab.page.Visible) then
+							nameLabel.Position = UDim2.new(0, 0, 0, 0)
+							task.wait(0.4)
+						else
+							task.wait(MARQUEE_PAUSE)
+							if marqueeId ~= id then
+								break
+							end
+							local duration = overflow / MARQUEE_SPEED
+							tween(nameLabel, duration, { Position = UDim2.new(0, -overflow, 0, 0) }, Enum.EasingStyle.Linear)
+							task.wait(duration + MARQUEE_PAUSE)
+							if marqueeId ~= id then
+								break
+							end
+							tween(nameLabel, duration, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Linear)
+							task.wait(duration)
+						end
+					end
+				end)
+			end
+
+			local function relayout()
+				local need = nameLabel.TextBounds.X
+				if need <= 0 then
+					need = #nameLabel.Text * 7
+				end
+				need = math.ceil(need) + 2
+				local width = math.min(need, CHIP_NAME_MAX)
+				nameClip.Size = UDim2.new(0, width, 1, 0)
+				chip.Size = UDim2.new(0, 19 + (vImage and 22 or 0) + width, 0, CHIP_H)
+				local newOverflow = math.max(need - width, 0)
+				if math.abs(newOverflow - overflow) > 0.5 then
+					overflow = newOverflow
+					runMarquee()
+				end
+			end
+			nameLabel:GetPropertyChangedSignal("TextBounds"):Connect(relayout)
+			relayout()
+
+			local v = {}
+			v.paint = function(on, animate)
+				recolor(chip, "BackgroundColor3", on and "btn2" or "card", animate)
+				if chipStroke then
+					recolor(chipStroke, "Color", on and "accent" or "stroke", animate)
+				end
+				recolor(nameLabel, "TextColor3", on and "text" or "muted", animate)
+				if chipIcon and tintIcons then
+					recolor(chipIcon, "ImageColor3", on and "accent" or "muted", animate)
+				end
+			end
+			v.paint(false, false)
+
+			v.view = make("Frame", {
 				Name = "VersionView",
 				Size = UDim2.new(1, 0, 1, 0),
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				Visible = false,
-			}, holder)
-
-			local header = make("Frame", {
-				Name = "Header",
-				Size = UDim2.new(1, 0, 0, 38),
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-			}, view)
-			make("UIPadding", { PaddingLeft = UDim.new(0, 12) }, header)
-			make("UIListLayout", {
-				FillDirection = Enum.FillDirection.Horizontal,
-				Padding = UDim.new(0, 10),
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				SortOrder = Enum.SortOrder.LayoutOrder,
-			}, header)
-
-			local backBtn = make("TextButton", {
-				Name = "Back",
-				Size = UDim2.new(0, 0, 0, 26),
-				AutomaticSize = Enum.AutomaticSize.X,
-				BackgroundColor3 = "btn2",
-				BorderSizePixel = 0,
-				AutoButtonColor = false,
-				Text = "",
-				LayoutOrder = 1,
-			}, header)
-			round(backBtn, 7, "stroke")
-			make("UIPadding", {
-				PaddingLeft = UDim.new(0, 8),
-				PaddingRight = UDim.new(0, 10),
-			}, backBtn)
-			make("UIListLayout", {
-				FillDirection = Enum.FillDirection.Horizontal,
-				Padding = UDim.new(0, 5),
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				SortOrder = Enum.SortOrder.LayoutOrder,
-			}, backBtn)
-			local backArrow = make("ImageLabel", {
-				Size = UDim2.new(0, 12, 0, 12),
-				BackgroundTransparency = 1,
-				Image = Images.SUBMIT,
-				ImageColor3 = iconRole("muted"),
-				Rotation = 180, -- the Submit arrow points right; turned around it points left
-				LayoutOrder = 1,
-			}, backBtn)
-			make("TextLabel", {
-				Size = UDim2.new(0, 0, 1, 0),
-				AutomaticSize = Enum.AutomaticSize.X,
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				Text = p.BackText ~= nil and tostring(p.BackText) or BACK_TEXT,
-				TextSize = 12,
-				TextColor3 = "text",
-				FontFace = FONT,
-				LayoutOrder = 2,
-			}, backBtn)
-
-			if vImage then
-				local headIcon = icon(header, 0, 0, "accent", vImage)
-				headIcon.LayoutOrder = 2
-			end
-			local headTitle = make("TextLabel", {
-				Size = UDim2.new(0, 0, 1, 0),
-				AutomaticSize = Enum.AutomaticSize.X,
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				Text = vTitle,
-				TextSize = 13,
-				TextColor3 = "text",
-				FontFace = FONT_BOLD,
-				LayoutOrder = 3,
-			}, header)
-
-			make("Frame", {
-				Position = UDim2.new(0, 12, 0, 38),
-				Size = UDim2.new(1, -26, 0, 1),
-				BackgroundColor3 = "stroke",
-				BorderSizePixel = 0,
-			}, view)
+			}, tab.area)
 
 			local vscroll = make("ScrollingFrame", {
 				Name = "VersionContent",
-				Position = UDim2.new(0, 0, 0, 39),
-				Size = UDim2.new(1, 0, 1, -39),
+				Size = UDim2.new(1, 0, 1, 0),
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
 				CanvasSize = UDim2.new(0, 0, 0, 0),
@@ -3695,71 +3422,64 @@ function Pages.new(ctx)
 				VerticalScrollBarInset = Enum.ScrollBarInset.None,
 				ScrollBarThickness = 2,
 				ScrollBarImageTransparency = 0.45,
-			}, view)
+			}, v.view)
 			setRole(vscroll, "ScrollBarImageColor3", "muted")
 			local vlayout = make("UIListLayout", {
 				Padding = UDim.new(0, 8),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}, vscroll)
 			make("UIPadding", {
-				PaddingTop = UDim.new(0, 10),
+				PaddingTop = UDim.new(0, 12),
 				PaddingBottom = UDim.new(0, 12),
 				PaddingLeft = UDim.new(0, 12),
 				PaddingRight = UDim.new(0, 14),
 			}, vscroll)
 
-			local v = { view = view, scroll = vscroll }
+			v.scroll = vscroll
 			v.refresh = function()
-				vscroll.CanvasSize = UDim2.new(0, 0, 0, vlayout.AbsoluteContentSize.Y + 22)
+				vscroll.CanvasSize = UDim2.new(0, 0, 0, vlayout.AbsoluteContentSize.Y + 24)
 			end
 			vlayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(v.refresh)
 
-			-- The cards react like the rest of the UI
-			card.MouseEnter:Connect(function()
-				tween(card, 0.12, { BackgroundColor3 = C.btn2 })
-				if cardStroke then
-					tween(cardStroke, 0.12, { Color = C.accent })
+			chip.MouseEnter:Connect(function()
+				if tab.activeVersion ~= v then
+					tween(chip, 0.12, { BackgroundColor3 = C.btn2 })
 				end
 			end)
-			card.MouseLeave:Connect(function()
-				tween(card, 0.12, { BackgroundColor3 = C.card })
-				if cardStroke then
-					tween(cardStroke, 0.12, { Color = C.stroke })
+			chip.MouseLeave:Connect(function()
+				if tab.activeVersion ~= v then
+					tween(chip, 0.12, { BackgroundColor3 = C.card })
 				end
 			end)
-			card.MouseButton1Click:Connect(function()
-				openVersion(v)
-			end)
-
-			backBtn.MouseEnter:Connect(function()
-				tween(backBtn, 0.12, { BackgroundColor3 = C.btn2Hover })
-				tintArrow(backArrow, C.text)
-			end)
-			backBtn.MouseLeave:Connect(function()
-				tween(backBtn, 0.12, { BackgroundColor3 = C.btn2 })
-				tintArrow(backArrow, C.muted)
-			end)
-			backBtn.MouseButton1Click:Connect(function()
+			chip.MouseButton1Click:Connect(function()
 				if state.closing then
 					return
 				end
 				if tab.activeVersion == v then
-					closeVersion()
+					if tab.hasDirect() then
+						closeVersion()
+					end
+				else
+					openVersion(v)
 				end
 			end)
 
-			-- Elements of the version (same methods as a Tab)
 			local vorder = 0
 			local function nextVersionOrder()
 				vorder = vorder + 1
 				return vorder
 			end
-			local featureCount = 0
 			local vobj = {}
-			attachElements(vobj, vscroll, nextVersionOrder, function()
-				featureCount = featureCount + 1
-				countLabel.Text = featureCount .. " " .. (featureCount == 1 and FEATURES_ONE or FEATURES_MANY)
-			end)
+			attachElements(vobj, vscroll, nextVersionOrder)
+
+			if vDesc ~= "" then
+				vobj:Label(vDesc)
+			end
+
+			table.insert(tab.versions, v)
+			if opened and current == tab then
+				tab.ensureVersion()
+			end
 
 			function vobj:Open()
 				if current ~= tab then
@@ -3776,25 +3496,29 @@ function Pages.new(ctx)
 			end
 			function vobj:SetTitle(str)
 				vTitle = tostring(str)
-				cardTitle.Text = vTitle
-				headTitle.Text = vTitle
+				nameLabel.Text = vTitle
+				relayout()
 				return self
 			end
 			function vobj:SetDesc(str)
-				cardDesc.Text = tostring(str)
+				vDesc = tostring(str)
 				return self
 			end
 			function vobj:Destroy()
 				if tab.activeVersion == v then
 					closeVersion()
 				end
-				card:Destroy()
-				view:Destroy()
+				marqueeId = marqueeId + 1
+				local index = table.find(tab.versions, v)
+				if index then
+					table.remove(tab.versions, index)
+				end
+				chip:Destroy()
+				v.view:Destroy()
 			end
 			return vobj
 		end
 
-		-- Tab:Back(): leaves the open Version and shows the grid again
 		function obj:Back()
 			closeVersion()
 			return self
@@ -3805,8 +3529,6 @@ function Pages.new(ctx)
 
 	applyTabsStyle()
 
-	-- KeySystem:SetTabsStyle("1" / "2") works before or after the window exists: ui.lua
-	-- calls this applier whenever the style changes. It returns false once the window is gone.
 	if ctx.registerTabsStyle then
 		ctx.registerTabsStyle(function()
 			if not page.Parent then
@@ -3821,12 +3543,42 @@ function Pages.new(ctx)
 		end)
 	end
 
+	local function showDirect()
+		if opened then
+			return
+		end
+		opened = true
+		page.Position = UDim2.new(0.5, 0, 0.5, 0)
+		if current and current.ensureVersion then
+			current.ensureVersion()
+		end
+		if current then
+			current.refresh()
+		end
+		local items = prep(page)
+		for _, it in ipairs(items) do
+			local saved = originals[it[1]]
+			if not saved then
+				saved = {}
+				originals[it[1]] = saved
+			end
+			if saved[it[2]] == nil then
+				saved[it[2]] = it[3]
+			end
+		end
+		fade(items, 0)
+		page.Visible = true
+		fade(items, 1, 0.5)
+	end
+
 	return {
 		createTab = createTab,
 		flags = flags,
-		open = open,
-		back = back,
+		showDirect = showDirect,
 		fadeOut = fadeOut,
+		count = function()
+			return #tabs
+		end,
 		isOpen = function()
 			return opened
 		end,
@@ -3868,9 +3620,9 @@ local NOTIF_COLOR = "bg"
 local NOTIF_BLUR = 6
 
 local CHECK_TIME = 1
+local MAIN_LOAD_TIME = 1.2
 local SAVED_CHECK_TIME = 0.15
 
--- Wrong-key lockout: this many failed checks in a row locks Submit for LOCKOUT_TIME seconds
 local MAX_FAILED_ATTEMPTS = 5
 local LOCKOUT_TIME = 30
 
@@ -3905,8 +3657,6 @@ local function logoRole(role)
 	return uiSettings.tintLogo and role or WHITE
 end
 
--- Parents the ScreenGui somewhere that works on this executor (gethui, CoreGui, PlayerGui)
--- and removes an older window with the same name, so re-executing doesn't stack windows.
 local function mountGui(gui)
 	if syn and syn.protect_gui then
 		pcall(syn.protect_gui, gui)
@@ -4275,9 +4025,6 @@ local COLOR_PROPS = {
 local bindings = {}
 local gradients = {}
 
--- UI/Title font (Ophyn:SetUIFont / Ophyn:SetTitleFont). Every label built through make()
--- with FontFace = FONT or FONT_BOLD is tracked here so both setters can restyle text that
--- already exists, not just text built afterwards.
 local fontBindings = {}
 local fontSettings = { ui = nil, title = nil }
 
@@ -4307,8 +4054,6 @@ local function applyFontAll()
 	end
 end
 
--- Marks an already-created label as the window title, so SetTitleFont targets only it
--- (SetUIFont still applies to it too, as a fallback, same as everything else).
 local function markTitleFont(inst)
 	for _, entryFont in ipairs(fontBindings) do
 		if entryFont.inst == inst then
@@ -4319,8 +4064,6 @@ local function markTitleFont(inst)
 	end
 end
 
--- Same idea for a bold label created via text() then switched to FONT_BOLD afterwards,
--- so SetUIFont/SetTitleFont don't flatten it back to the regular weight later.
 local function markBoldFont(inst)
 	for _, entryFont in ipairs(fontBindings) do
 		if entryFont.inst == inst then
@@ -4331,9 +4074,6 @@ local function markBoldFont(inst)
 	end
 end
 
--- Accepts a Font instance, a Roblox Enum.Font name ("Gotham", "SourceSansBold", ...), a
--- custom font family asset ("rbxassetid://..." or a bare numeric id), or a table
--- { Family = ..., Weight = ..., Style = ... }.
 local function resolveFont(input)
 	if input == nil then
 		return nil
@@ -4358,20 +4098,24 @@ local function resolveFont(input)
 	return Font.new(family, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
 end
 
+local function assignProp(inst, prop, value)
+	inst[prop] = value
+end
+
 local function make(class, props, parent)
 	local inst = Instance.new(class)
 	for k, v in pairs(props) do
 		if type(v) == "string" and COLOR_PROPS[k] then
 			bindings[#bindings + 1] = { inst, k, v }
-			inst[k] = C[v]
+			pcall(assignProp, inst, k, C[v])
 		elseif k == "FontFace" and (v == FONT or v == FONT_BOLD) then
 			fontBindings[#fontBindings + 1] = { inst = inst, bold = (v == FONT_BOLD), title = false }
-			inst[k] = v
+			pcall(assignProp, inst, k, v)
 		else
-			inst[k] = v
+			pcall(assignProp, inst, k, v)
 		end
 	end
-	inst.Parent = parent
+	pcall(assignProp, inst, "Parent", parent)
 	return inst
 end
 
@@ -4396,7 +4140,7 @@ local function setRole(inst, prop, role)
 	if not found then
 		bindings[#bindings + 1] = { inst, prop, role }
 	end
-	inst[prop] = C[role]
+	pcall(assignProp, inst, prop, C[role])
 end
 
 local function frame(parent, x, y, w, h, color, transparency)
@@ -4454,7 +4198,6 @@ local function icon(parent, x, y, color, image)
 		BackgroundTransparency = 1,
 		ImageColor3 = iconRole(color),
 	}, holder)
-	-- `image` can be an asset id or a Lucide icon name ("house" / "lucide:house")
 	Lucide.apply(img, image)
 	return holder
 end
@@ -4604,8 +4347,6 @@ end
 local UI = {}
 UI.Jnkie = Jnkie
 
--- Get key button customisation (KeySystem:SetGetkeyTitle / :SetGetkeyIcon).
--- Stored here so it works before or after KeySystem.new, and updates a UI that is already open.
 local getkeySettings = { title = nil, icon = nil }
 local getkeyAppliers = {}
 
@@ -4615,13 +4356,6 @@ local function applyGetkeyAll()
 	end
 end
 
--- Get key dropdown (KeySystem:GetMethod). Each call adds one option:
--- Ophyn:GetMethod({ Title = "...", Icon = "rbxassetid://...", URL = "..." })
--- or, for a dynamic link (matches a custom service's GetKeyLink(ctx)):
--- Ophyn:GetMethod({ Title = "...", Icon = "...", GetKeyLink = function(ctx) return url end })
--- Once 2+ methods are registered, the get key button grows an arrow that opens a dropdown
--- to pick between them; picking one only changes the button's text/icon (SetGetkeyTitle
--- keeps working as the fallback label when no method is selected yet).
 local getMethods = {}
 local selectedMethodIndex = nil
 
@@ -4632,7 +4366,7 @@ function UI.GetMethod(entry)
 		icon = entry.Icon,
 		url = entry.URL,
 		getKeyLink = entry.GetKeyLink or entry.getKeyLink,
-		fields = entry, -- extra custom fields, passed back as ctx to GetKeyLink
+		fields = entry,
 	}
 	table.insert(getMethods, method)
 	if not selectedMethodIndex then
@@ -4642,22 +4376,17 @@ function UI.GetMethod(entry)
 	return #getMethods
 end
 
--- Readable icon/text color on top of a filled color
 local function contrastOn(color)
 	local luminance = 0.299 * color.R + 0.587 * color.G + 0.114 * color.B
 	return luminance > 0.55 and Color3.fromRGB(11, 11, 11) or Color3.fromRGB(255, 255, 255)
 end
 
--- Notification style (NotifStyle / KeySystem:SetNotifStyle). Read every time a notification is shown.
 local notifSettings = { style = nil }
 
 function UI.SetNotifStyle(style)
 	notifSettings.style = style ~= nil and tostring(style) or nil
 end
 
--- Tabs style (TabsStyle / KeySystem:SetTabsStyle): "1" Tabs in a column on the left (default),
--- "2" Tabs in a row right under the topbar. Works before or after KeySystem.new: windows that
--- already exist re-layout themselves through the appliers they registered.
 local tabsSettings = { style = nil }
 local tabsAppliers = {}
 
@@ -4704,16 +4433,12 @@ function UI.new(options)
 	local FOLDER = cfg.Folder
 	local LOGO = assetId(cfg.Logo) or Images.LOGO
 
-	-- Preloads every icon (+ the logo) as early as possible. The Key System content
-	-- only becomes visible/interactive once this finishes (see `iconsPreloaded`
-	-- below), so icons and images are guaranteed to be loaded before the Key
-	-- System is shown to the user.
 	local iconsPreloaded = false
 	task.spawn(function()
 		pcall(function()
 			local list = {}
-			for _, id in pairs(Images) do
-				if type(id) == "string" then
+			for name, id in pairs(Images) do
+				if type(id) == "string" and name ~= "FONT" then
 					table.insert(list, id)
 				end
 			end
@@ -4724,7 +4449,7 @@ function UI.new(options)
 	end)
 
 	local INTRO_SIZE = tonumber(cfg.startintro_size) or 80
-	local LOADING_TIME = 3 -- fixed: icons/images preload during this time
+	local LOADING_TIME = 3
 	local SQUARE_TIME = tonumber(cfg.squareintro_time) or 1.2
 	local SHOW_SQUARE_CONTORN = asBool(cfg.squarecontorn, true)
 
@@ -4745,11 +4470,6 @@ function UI.new(options)
 	local HAS_DISCORD = DISCORD_LINK ~= ""
 	local HAS_WEBSITE = WEBSITE_LINK ~= ""
 
-	-- card = whether each card shows up at all, separate from whether a link is set.
-	-- Discord and Information default to shown; Website defaults to whatever HAS_WEBSITE
-	-- is (most people don't have one, so it stays hidden unless a link is actually given).
-	-- What the person passes to KeySystem.new wins over the defaults in variables.lua.
-	-- Accepts Discord/Website (or lowercase) as true/false or "true"/"false".
 	local function cardFlag(default, ...)
 		for _, source in ipairs({ options or {}, Variables }) do
 			for _, key in ipairs({ ... }) do
@@ -4764,12 +4484,8 @@ function UI.new(options)
 	local SHOW_DISCORD_CARD = cardFlag(true, "Discord", "discord")
 	local SHOW_WEBSITE_CARD = cardFlag(HAS_WEBSITE, "Website", "website")
 	local SHOW_INFO_CARD = cardFlag(true, "Informations", "Information", "informations", "information")
-	-- Intro: false = no intro animation, just fade in on open / fade out on close
 	local SHOW_INTRO = cardFlag(true, "Intro", "intro")
 
-	-- Keyless mode: Keyless = { disabletextbox, disablegetkey, showcard, autoconfirm }.
-	-- Passing the table turns it on (enabled = false keeps it off); Keyless = true/false also works.
-	-- What the person passes to KeySystem.new wins over variables.lua.
 	local KL = { disabletextbox = true, disablegetkey = true, showcard = true, autoconfirm = false }
 	local KEYLESS = false
 	do
@@ -4793,13 +4509,20 @@ function UI.new(options)
 			KEYLESS = asBool(raw, false)
 		end
 	end
+	do
+		local ks = cfg.KeySystem
+		local off = ks == false or cfg.UseKey == false or cfg.UseKeySystem == false
+		if type(ks) == "table" and (ks.Enabled == false or ks.enabled == false) then
+			off = true
+		end
+		if off then
+			KEYLESS = true
+		end
+	end
 	local SHOW_KEYLESS_CARD = KEYLESS and KL.showcard
 
-	-- Only Discord enabled (no Website card): it starts expanded to fill the free space.
-	-- With the Keyless card on, Discord starts collapsed so both cards fit.
 	local DISCORD_STARTS_OPEN = SHOW_DISCORD_CARD and not SHOW_WEBSITE_CARD and HAS_DISCORD and not SHOW_KEYLESS_CARD
 
-	-- Notification style: "1" Stripe, "2" Pill, "3" Island, "4" Ring, "5" Solid
 	local NOTIF_STYLE = "1"
 	for _, source in ipairs({ options or {}, Variables }) do
 		local value = source.NotifStyle
@@ -4829,21 +4552,16 @@ function UI.new(options)
 		WEBSITE_URL = WEBSITE_LINK:match("^https?://") and WEBSITE_LINK or ("https://" .. WEBSITE_LINK)
 	end
 
-	-- KeySystem = { Key = {"1234", "5678"} or function(key) -> valid, reason, URL = "...", SaveKey = false,
-	--               API = { { Type = "platoboost" | "panda" | "jnkie" | "custom", ... } } }
 	local KEY_CFG = cfg.KeySystem or {}
 	local KEY_LIST = KEY_CFG.Key
 
-	-- Key services (KeySystem.API). Each entry is built by its Type.
 	local SERVICE_BUILDERS = {
 		platoboost = function(entry)
 			return Platoboost.new(entry)
 		end,
-		-- { Type = "panda", ServiceId = "..." }
 		panda = function(entry)
 			return Panda.new(entry)
 		end,
-		-- { Type = "jnkie", Service = "...", Identifier = "...", Provider = "Mixed" }
 		jnkie = function(entry)
 			local instance = Jnkie.new(entry)
 			return {
@@ -4859,12 +4577,6 @@ function UI.new(options)
 		end,
 	}
 
-	-- Your own service:
-	-- { Type = "custom", ServiceId = 1234, --[[ any fields you want ]]
-	--   CheckKey = function(key, ctx) return valid, reason end,   -- required
-	--   GetKeyLink = function(ctx) return url end }               -- optional ("Get a key" button)
-	-- ctx = every field of the entry (ServiceId, Secret, ...) + ctx.Request
-	-- (the executor's HTTP function, or nil). GetKeyLink can return nil, "reason" on failure.
 	SERVICE_BUILDERS.custom = function(entry)
 		local checker = entry.CheckKey or entry.checkKey
 		if type(checker) ~= "function" then
@@ -4872,7 +4584,6 @@ function UI.new(options)
 		end
 		local getLink = entry.GetKeyLink or entry.getKeyLink
 
-		-- Built on every call, so the person's own fields can override Request.
 		local function context()
 			local serviceCtx = { Request = Http.request() }
 			for k, v in pairs(entry) do
@@ -4892,11 +4603,11 @@ function UI.new(options)
 		}
 	end
 
-	SERVICE_BUILDERS.pandaauth = SERVICE_BUILDERS.panda -- alias
+	SERVICE_BUILDERS.pandaauth = SERVICE_BUILDERS.panda
 
 	local apiEntries = type(KEY_CFG.API) == "table" and KEY_CFG.API or {}
 	if apiEntries.Type ~= nil or apiEntries.type ~= nil then
-		apiEntries = { apiEntries } -- a single entry without the outer list
+		apiEntries = { apiEntries }
 	end
 
 	local API_SERVICES = {}
@@ -4921,7 +4632,6 @@ function UI.new(options)
 	local KEY_URL = tostring(KEY_CFG.URL or "")
 	local KEY_SAVE = asBool(KEY_CFG.SaveKey, false)
 
-	-- Links used by the buttons (Get a key / Discord / Website)
 	local LINKS = {
 		getKey = KEY_URL,
 		website = WEBSITE_URL,
@@ -4936,21 +4646,14 @@ function UI.new(options)
 		return mt ~= nil and mt.__call ~= nil
 	end
 
-	-- Auto-detect a Jnkie.Validator() adapter so "Get a key" can call
-	-- Jnkie:GetKeyLink() on its own, with no KeySystem.URL required.
-	-- Also accepts a *raw* Jnkie instance (Key = jnkie instead of
-	-- Key = jnkie:Validator()) and upgrades it automatically.
 	if type(KEY_LIST) == "table" and KEY_LIST.__isJnkieInstance and not KEY_LIST.__isJnkie then
 		KEY_LIST = KEY_LIST:Validator()
 	end
 	local KEY_JNKIE = type(KEY_LIST) == "table" and KEY_LIST.__isJnkie and KEY_LIST.__instance or nil
 
-	-- Returns valid (boolean) and reason (string when invalid).
-	-- Errors here are caught by the pcall in runKeyCheck ("Something went wrong").
 	local function validateKey(key)
 		local reason
 
-		-- Key = { "a", "b" } | "a" | function(key) | Jnkie:Validator()
 		if KEY_LIST ~= nil then
 			if isCallable(KEY_LIST) then
 				local valid, why = KEY_LIST(key)
@@ -4969,7 +4672,6 @@ function UI.new(options)
 			end
 		end
 
-		-- KeySystem.API (Platoboost / Panda / Jnkie / custom)
 		for _, service in ipairs(API_SERVICES) do
 			local ok, valid, why = pcall(service.CheckKey, service, key)
 			if ok and valid then
@@ -5013,7 +4715,6 @@ function UI.new(options)
 		return pcall(writefile, path, contents) == true
 	end
 
-	-- Key file name = generated hash (deterministic: same Folder + Title = same file)
 	local function hashName(seed)
 		local bxor = bit32 and bit32.bxor
 		local parts = {}
@@ -5044,9 +4745,6 @@ function UI.new(options)
 		end
 	end
 
-	-- Information card stats: how many key checks were valid, how many came back
-	-- expired, and when a key last passed. Stored locally per Folder + Title, same
-	-- as the saved key, just under a different hashed file name.
 	local STATS_HASH = hashName(tostring(FOLDER or "") .. "|" .. HUB_NAME .. "|stats")
 	local STATS_FILE = (FOLDER and FOLDER ~= "" and (FOLDER .. "/" .. STATS_HASH)) or STATS_HASH
 
@@ -5091,7 +4789,6 @@ function UI.new(options)
 	end
 
 	local state = { ready = false, closing = false }
-	local snapLocked = false
 
 	local root = Instance.new("ScreenGui")
 	root.Name = "ophyn-ui-wow"
@@ -5100,9 +4797,12 @@ function UI.new(options)
 	root.IgnoreGuiInset = true
 	root.ResetOnSpawn = false
 	root.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	root.ClipToDeviceSafeArea = true
 
-	-- Release this window's entries from the shared binding tables when it goes away
+	if not mountGui(root) then
+		root:Destroy()
+		error("[" .. HUB_NAME .. "] couldn't find a place to mount the UI")
+	end
+
 	root.Destroying:Connect(function()
 		for i = #bindings, 1, -1 do
 			if bindings[i][1]:IsDescendantOf(root) then
@@ -5188,7 +4888,6 @@ function UI.new(options)
 		canvas = canvas,
 		state = state,
 		tintIcons = uiSettings.tintIcons,
-		-- wrong-key lockout (see MAX_FAILED_ATTEMPTS / LOCKOUT_TIME)
 		attempts = { fails = 0, lockedUntil = 0 },
 		getStyle = function()
 			return notifSettings.style or NOTIF_STYLE
@@ -5204,7 +4903,6 @@ function UI.new(options)
 
 	local notifs = Notification.new(ctx)
 	local notify = notifs.notify
-	local Blur = notifs.blur
 
 	local intro = centered(canvas, FINAL_W, FINAL_H)
 
@@ -5298,121 +4996,6 @@ function UI.new(options)
 	local ringItems = prep(ringHolder)
 	fade(ringItems, 0)
 
-	local morph = centered(canvas, NOTIF_W, 62)
-	morph.Visible = false
-
-	-- "Loading Script.." card. It follows NotifStyle: the window shrinks into that notification's shape.
-	local MORPH_TITLE, MORPH_HINT = "Loading Script..", "Can take 1-2s..."
-
-	local function morphLoader(parent, size, thickness, arcColor, trackColor, trackTransparency)
-		ring(parent, size, thickness, trackColor, trackTransparency)
-		local arc, arcStroke = ring(parent, size, thickness, arcColor, 0)
-		comet(arcStroke)
-		return TweenService:Create(
-			arc,
-			TweenInfo.new(0.8, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1),
-			{ Rotation = 360 }
-		)
-	end
-
-	local function morphLabel(x, y, w, h, str, size, color, bold)
-		local l = text(morph, str, x, y, w, h, size, color)
-		if bold then
-			markBoldFont(l)
-		end
-		return l
-	end
-
-	local function buildMorph(key)
-		morph:ClearAllChildren()
-
-		local w, h = NOTIF_W, 62
-		local spec = {
-			top = false,
-			radius = 10,
-			bg = C[NOTIF_COLOR],
-			bgTransparency = NOTIF_TRANSPARENCY,
-			border = C.stroke,
-			borderTransparency = 0.35,
-		}
-		local spin
-
-		if key == "2" then
-			-- Pill
-			w, h = 240, 36
-			spec.radius = 18
-			local box = frame(morph, 6, 6, 24, 24)
-			spin = morphLoader(box, 20, 2, "accent", "muted", 0.75)
-			make("TextLabel", {
-				Position = UDim2.new(0, 38, 0, 0),
-				Size = UDim2.new(0, w - 52, 0, h),
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				RichText = true,
-				Text = "<b>Loading script..</b>  <font color=\"#" .. C.muted:ToHex() .. "\">1-2s</font>",
-				TextSize = 13,
-				TextColor3 = "text",
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextYAlignment = Enum.TextYAlignment.Center,
-				FontFace = FONT,
-			}, morph)
-		elseif key == "3" then
-			-- Island
-			w, h = 260, 52
-			spec.top = true
-			spec.radius = 26
-			spec.bg = Color3.fromRGB(0, 0, 0)
-			spec.bgTransparency = 0.06
-			spec.border = Color3.fromRGB(42, 42, 48)
-			local badge = frame(morph, 10, 10, 32, 32, "accent", 0.86)
-			round(badge, 16, "accent")
-			badge.UIStroke.Transparency = 0.6
-			spin = morphLoader(badge, 16, 2, "accent", "muted", 0.75)
-			morphLabel(54, 9, w - 70, 16, MORPH_TITLE, 13, Color3.fromRGB(244, 244, 245), true)
-			morphLabel(54, 27, w - 70, 14, MORPH_HINT, 12, Color3.fromRGB(154, 154, 162))
-		elseif key == "4" then
-			-- Ring
-			h = 60
-			local box = frame(morph, 10, 10, 40, 40)
-			spin = morphLoader(box, 34, 3, "accent", "muted", 0.75)
-			morphLabel(62, 11, w - 76, 18, MORPH_TITLE, 13, "text", true)
-			morphLabel(62, 31, w - 76, 16, MORPH_HINT, 12, "muted")
-		elseif key == "5" then
-			-- Solid
-			h = 58
-			local accent = C.accent
-			local onColor = contrastOn(accent)
-			spec.bg = accent
-			spec.bgTransparency = 0.04
-			spec.borderTransparency = 1
-			local box = frame(morph, 14, (h - 22) / 2, 22, 22)
-			spin = morphLoader(box, 20, 3, onColor, onColor, 0.75)
-			morphLabel(48, 10, w - 62, 18, MORPH_TITLE, 13, onColor, true)
-			morphLabel(48, 30, w - 62, 16, MORPH_HINT, 12, onColor:Lerp(accent, 0.35))
-		else
-			-- Stripe
-			round(frame(morph, 8, 10, 3, h - 20, "accent", 0), 2)
-			morphLabel(22, 11, w - 36, 18, MORPH_TITLE, 13, "text", true)
-			morphLabel(22, 30, w - 36, 16, MORPH_HINT, 12, "muted")
-			local trackW = w - 44
-			round(frame(morph, 22, h - 9, trackW, 2, "accent", 0.8), 1)
-			local fill = frame(morph, 22, h - 9, 0, 2, "accent", 0)
-			round(fill, 1)
-			spin = TweenService:Create(
-				fill,
-				TweenInfo.new(2.2, Enum.EasingStyle.Linear),
-				{ Size = UDim2.new(0, trackW, 0, 2) }
-			)
-		end
-
-		morph.Size = UDim2.new(0, w, 0, h)
-		local items = prep(morph)
-		fade(items, 0)
-
-		spec.w, spec.h, spec.spin, spec.items = w, h, spin, items
-		return spec
-	end
-
 	local content = centered(canvas, FINAL_W, FINAL_H)
 	content.Visible = false
 
@@ -5500,24 +5083,19 @@ function UI.new(options)
 	local getKeyPadding = make("UIPadding", { PaddingLeft = UDim.new(0, 24) }, getKey)
 	local getKeyIcon = icon(getKey, -12, 9, "text", Images.KEY)
 
-	-- Dropdown arrow: a separate hit area over the button's right edge, only visible
-	-- once there are 2+ methods (see Ophyn:GetMethod above). Being its own TextButton on
-	-- top of "getKey" means clicking it never also fires getKey's own click below.
 	local methodArrow = make("TextButton", {
 		Name = "TextButton",
 		Position = UDim2.new(1, -26, 0, 0),
 		Size = UDim2.new(0, 26, 1, 0),
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
-		Text = "\226\150\190", -- U+25BE, small down-pointing triangle
+		Text = "\226\150\190",
 		TextSize = 11,
 		TextColor3 = "text",
 		FontFace = FONT,
 		Visible = false,
 	}, getKey)
 
-	-- Dropdown list, parented to "main" (not "canvas") so it isn't clipped by the
-	-- window's edges when it opens above/below the button.
 	local methodDropdown = make("Frame", {
 		Name = "GetKeyDropdown",
 		BackgroundColor3 = "card",
@@ -5572,12 +5150,10 @@ function UI.new(options)
 		rebuildMethodDropdown()
 		local pos = getKey.AbsolutePosition - main.AbsolutePosition
 		local h = methodDropdown.AbsoluteSize.Y
-		methodDropdown.Position = UDim2.new(0, pos.X, 0, pos.Y - h - 6) -- opens upward
+		methodDropdown.Position = UDim2.new(0, pos.X, 0, pos.Y - h - 6)
 		methodDropdown.Visible = true
 	end)
 
-	-- Clicking anywhere outside the dropdown (or its arrow) closes it.
-	-- root.IgnoreGuiInset = true, so input positions and Abs* coordinates line up.
 	do
 		local outsideConn = UserInputService.InputBegan:Connect(function(input)
 			if not methodDropdown.Visible then
@@ -5634,7 +5210,6 @@ function UI.new(options)
 		submit.Size = UDim2.new(0, 228, 0, 34)
 	end
 
-	-- Avatar + "Welcome Back / <name>!"
 	local avatar = make("ImageLabel", {
 		Position = UDim2.new(0, 22, 0, 214),
 		Size = UDim2.new(0, 32, 0, 32),
@@ -5684,11 +5259,8 @@ function UI.new(options)
 
 	local rightDivider = frame(right, 20, 148, 147, 1, "stroke", 0)
 
-	-- Scrollable card list. Cards are laid out inside it (see layoutCards); once they
-	-- no longer fit it can be scrolled with the wheel, by touch, or by dragging.
-	-- CARD_PAD leaves room for the 1px outer card strokes, which would be clipped otherwise.
 	local CARD_PAD = 2
-	local CARD_VIEW_BOTTOM = 256 -- bottom edge of the visible card area
+	local CARD_VIEW_BOTTOM = 256
 	local cardScroll = make("ScrollingFrame", {
 		Name = "Cards",
 		Position = UDim2.new(0, 20 - CARD_PAD, 0, 158 - CARD_PAD),
@@ -5772,15 +5344,12 @@ function UI.new(options)
 	local rowsItems = prep(rows)
 	local discordIconItems = prep(discordIcon)
 
-	-- Information card: local stats only (valid keys, expired keys, last used)
 	local infoCard, infoIcon, infoTitle, infoSub = linkButton(254, "Information", "Tap to view", Images.KEY)
 	infoCard.Visible = SHOW_INFO_CARD
 	infoCard.ClipsDescendants = true
 	infoTitle.TextTruncate = Enum.TextTruncate.AtEnd
 
-	-- Expanded Information card: same look as the expanded Discord card
 	local INFO_OPEN_H = 92
-	-- Grouped in one table: UI.new is close to Lua's limit of 200 local variables.
 	local infoUI = {}
 	do
 		local extra = frame(infoCard, 0, 0, 147, INFO_OPEN_H)
@@ -5812,7 +5381,6 @@ function UI.new(options)
 	infoUI.extraItems = prep(infoUI.extra)
 	infoUI.iconItems = prep(infoIcon)
 
-	-- Keyless Mode card: informational only (no click)
 	local keylessCard = linkButton(206, "Keyless Mode", "No key needed", Images.KEYLESS)
 	keylessCard.Visible = SHOW_KEYLESS_CARD
 
@@ -5867,10 +5435,6 @@ function UI.new(options)
 
 	local closeGui
 
-	-- Page 2: a down arrow at the bottom of the Key System slides it up and brings in the
-	-- topbar + Tabs (OphynWindow({ Title, Icon }), Tab:Section, Tab:Paragraph). Kept in ctx
-	-- so it doesn't take another local in UI.new (already close to Lua's limit). It is built
-	-- before prep(content) on purpose, so the arrow fades in and out with the Key System.
 	ctx.pages = Pages.new({
 		C = C,
 		make = make,
@@ -5885,7 +5449,6 @@ function UI.new(options)
 		iconRole = iconRole,
 		logoRole = logoRole,
 		markTitleFont = markTitleFont,
-		-- SetTabsStyle wins over TabsStyle from KeySystem.new({ ... }) / variables.lua
 		getTabsStyle = function()
 			if tabsSettings.style then
 				return tabsSettings.style
@@ -5925,9 +5488,6 @@ function UI.new(options)
 		end,
 	})
 
-	-- Keyless mode: dim + lock the disabled parts. This runs BEFORE prep(content) on
-	-- purpose, so the dimmed transparencies become the "original" values that
-	-- fade() restores (a later fade-in would otherwise undo the dimming).
 	if KEYLESS then
 		local DIM = 0.5
 		local function dim(container)
@@ -5981,9 +5541,7 @@ function UI.new(options)
 	fade(spinnerItems, 0)
 	fade(contentItems, 0)
 
-	local SUPPORTED_GAMES = {} -- [PlaceId] = true
-	-- SupportedGames: { [PlaceId] = true, ... } or a plain list { PlaceId, PlaceId, ... }.
-	-- What the person passes to KeySystem.new wins over the default in variables.lua.
+	local SUPPORTED_GAMES = {}
 	for _, source in ipairs({ options or {}, Variables }) do
 		local value = source.SupportedGames
 		if value == nil then
@@ -6102,7 +5660,6 @@ function UI.new(options)
 			return
 		end
 
-		-- Services that can generate a key link (KeySystem.API and Jnkie)
 		local linkProviders = {}
 		for _, service in ipairs(API_SERVICES) do
 			if service.GetKeyLink then
@@ -6268,10 +5825,6 @@ function UI.new(options)
 		task.spawn(fetchDiscord)
 	end
 
-	-- Stacks whichever cards are enabled (Discord, Keyless, Website, Information, in
-	-- that order) inside the scroll frame. Expanding a card (Discord / Information)
-	-- pushes the cards below it down and moves the whole list up, hiding the
-	-- Executor / Status rows. Anything that doesn't fit becomes scrollable.
 	local CARD_GAP = 8
 	local cardOrder = {}
 	if SHOW_DISCORD_CARD then
@@ -6299,7 +5852,6 @@ function UI.new(options)
 
 	local layoutToken = 0
 
-	-- focusCard: scrolled into view when the layout changes (used when a card expands)
 	local function layoutCards(instant, focusCard)
 		local Quint = Enum.EasingStyle.Quint
 		local open = anyCardOpen()
@@ -6358,8 +5910,6 @@ function UI.new(options)
 
 		tween(rightDivider, 0.55, { Position = UDim2.new(0, 20, 0, divider) }, Quint)
 
-		-- Grow the canvas right away (so the scroll target is reachable); shrink it only
-		-- once the cards finished moving (so the position doesn't get clamped mid-tween).
 		if canvasH >= cardScroll.CanvasSize.Y.Offset then
 			cardScroll.CanvasSize = canvasSize
 		else
@@ -6377,8 +5927,6 @@ function UI.new(options)
 	end
 	layoutCards(true)
 
-	-- Dragging the card list with the mouse (the wheel and touch scroll natively).
-	-- A drag never counts as a click on the card under the cursor.
 	local suppressClick = false
 	do
 		local dragging, dragStartY, dragStartCanvas = false, 0, 0
@@ -6467,7 +6015,6 @@ function UI.new(options)
 		end
 	end
 
-	-- Same end state as setDiscord(true), without animation (content is still hidden at launch)
 	if DISCORD_STARTS_OPEN then
 		discordOpen = true
 		discordToken += 1
@@ -6595,8 +6142,6 @@ function UI.new(options)
 
 	local checkingKey = false
 
-	-- While a card is expanded the Executor/Status rows stay hidden, and the small
-	-- icon of the expanded card is replaced by its bigger one
 	local fadeContent
 	do
 		local rowsHidden, discordIconHidden, infoIconHidden = {}, {}, {}
@@ -6724,9 +6269,6 @@ function UI.new(options)
 			content.Visible = true
 			fadeContent(1, 0.35)
 			if result and result.ok then
-				-- The check completed and said "invalid": a saved key that fails is stale
-				-- (expired / revoked), so forget it instead of retrying it on every launch.
-				-- Network errors land in the else-branch below and never delete the key.
 				if isSavedKey then
 					if delfile and safeIsFile(KEY_FILE) then
 						pcall(delfile, KEY_FILE)
@@ -6805,88 +6347,81 @@ function UI.new(options)
 		tween(checkText, 0.3, { TextTransparency = 0, Position = UDim2.new(0, 0, 0, 156) }, Enum.EasingStyle.Quint)
 		task.wait(isSavedKey and 0.35 or 1)
 
-		snapLocked = true
 		fade(ringItems, 0, 0.2)
 		tween(checkText, 0.2, { TextTransparency = 1 })
-		task.wait(0.2)
+		task.wait(0.25)
 		checkScreen.Visible = false
-		local morphSpec = buildMorph(notifs.styleKey())
-		morph.Visible = true
-		morphSpec.spin:Play()
-		Blur.acquire()
-
-		local vp = root.AbsoluteSize
-		local targetX, targetY
-		if morphSpec.top then
-			targetX = vp.X / 2
-			targetY = 12 + morphSpec.h / 2
-		else
-			targetX = vp.X - 16 - morphSpec.w / 2
-			targetY = vp.Y - 16 - morphSpec.h / 2
-		end
-		tween(main, 0.7, {
-			Size = UDim2.new(0, morphSpec.w, 0, morphSpec.h),
-			Position = UDim2.new(0, targetX, 0, targetY),
-		}, Enum.EasingStyle.Quart, Enum.EasingDirection.InOut)
-		tween(canvas, 0.7, { BackgroundColor3 = morphSpec.bg, BackgroundTransparency = morphSpec.bgTransparency })
-		tween(canvasCorner, 0.7, { CornerRadius = UDim.new(0, morphSpec.radius) })
-		tween(decorGroup, 0.4, { GroupTransparency = 1 })
-		tween(shadow, 0.5, { ImageTransparency = 1 })
-		tween(borderStroke, 0.5, { Transparency = morphSpec.borderTransparency, Color = morphSpec.border })
-		task.delay(0.35, function()
-			fade(morphSpec.items, 1, 0.3)
-		end)
-		task.wait(0.75)
-
-		task.wait(isSavedKey and 0.2 or 1)
-
-		local runError
-		task.spawn(function()
-			local callback = cfg.Callback
-			if type(callback) == "string" and callback ~= "" then
-				if not loadstring then
-					runError = "loadstring is not available"
-					return
-				end
-				local fn, compileError = loadstring(callback)
-				if not fn then
-					runError = compileError
-					return
-				end
-				callback = fn
-			end
-			if type(callback) == "function" then
-				local ok, err = pcall(callback, key)
-				if not ok then
-					runError = err
-				end
-			end
-		end)
-		task.wait(0.3)
-
-		morphSpec.spin:Cancel()
-		Blur.release()
-		fade(morphSpec.items, 0, 0.25)
-		tween(canvas, 0.3, { BackgroundTransparency = 1 })
-		tween(borderStroke, 0.3, { Transparency = 1 })
-		task.wait(0.35)
-
-		if runError then
-			notify("Script error", tostring(runError):sub(1, 80), "error", nil, 5)
-			task.wait(5.5)
-		end
-		root:Destroy()
+		ctx.openMain(true, key)
 	end
 
-	-- Submit (button click or Enter in the key box). Kept on ctx instead of a new local:
-	-- UI.new is close to Lua's limit of 200 locals.
+	ctx.runCallback = function(key)
+		local callback = cfg.Callback
+		if type(callback) == "string" and callback ~= "" then
+			if not loadstring then
+				return "loadstring is not available"
+			end
+			local fn, compileError = loadstring(callback)
+			if not fn then
+				return compileError
+			end
+			callback = fn
+		end
+		if type(callback) == "function" then
+			local ok, err = pcall(callback, key)
+			if not ok then
+				return err
+			end
+		end
+		return nil
+	end
+
+	ctx.openMain = function(withLoader, key)
+		if withLoader then
+			spinnerHolder.Position = UDim2.new(0.5, 0, 0.5, 0)
+			spin:Play()
+			fade(spinnerItems, 1, 0.25)
+			task.wait(MAIN_LOAD_TIME)
+			fade(spinnerItems, 0, 0.25)
+			task.wait(0.3)
+			spin:Cancel()
+		end
+
+		local waitStart = os.clock()
+		while ctx.pages.count() == 0 and os.clock() - waitStart < 3 do
+			task.wait(0.1)
+		end
+
+		if ctx.pages.count() == 0 then
+			local err = ctx.runCallback(key)
+			if err then
+				notify("Script error", tostring(err):sub(1, 80), "error", nil, 5)
+				task.wait(5.5)
+			end
+			checkingKey = false
+			closeGui()
+			return
+		end
+
+		ctx.pages.showDirect()
+		task.wait(0.5)
+		state.ready = true
+		checkingKey = false
+
+		task.spawn(function()
+			local err = ctx.runCallback(key)
+			if err and not state.closing then
+				notify("Script error", tostring(err):sub(1, 80), "error", nil, 5)
+			end
+		end)
+	end
+
 	ctx.submit = function()
 		if not state.ready or state.closing or checkingKey then
 			return
 		end
 
 		if KEYLESS then
-			runKeyCheck("") -- the Callback receives an empty key in keyless mode
+			runKeyCheck("")
 			return
 		end
 
@@ -6912,7 +6447,6 @@ function UI.new(options)
 		end
 	end)
 
-	-- Close the UI (the X closes directly, no confirmation popup)
 	closeGui = function()
 		if state.closing then
 			return
@@ -6925,7 +6459,6 @@ function UI.new(options)
 		tween(closeBtn, 0.15, { BackgroundTransparency = 1 })
 
 		if not SHOW_INTRO then
-			-- No intro: plain fade-out
 			fadeContent(0, 0.3)
 			ctx.pages.fadeOut(0.3)
 			tween(canvas, 0.35, { BackgroundTransparency = 1 })
@@ -6965,7 +6498,6 @@ function UI.new(options)
 		task.spawn(closeGui)
 	end)
 
-	-- Hovers
 	closeBtn.MouseEnter:Connect(function()
 		if not state.ready or state.closing then
 			return
@@ -7034,16 +6566,12 @@ function UI.new(options)
 		task.spawn(switchTheme)
 	end)
 
-	if not mountGui(root) then
-		root:Destroy()
-		error("[" .. HUB_NAME .. "] couldn't find a place to mount the UI (gethui / CoreGui / PlayerGui all failed)")
-	end
-
 	local function snap()
-		if snapLocked then
+		local size = root.AbsoluteSize
+		if size.X <= 0 or size.Y <= 0 then
+			main.Position = UDim2.new(0.5, 0, 0.5, 0)
 			return
 		end
-		local size = root.AbsoluteSize
 		main.Position = UDim2.new(0, math.floor(size.X / 2), 0, math.floor(size.Y / 2))
 	end
 	snap()
@@ -7076,9 +6604,6 @@ function UI.new(options)
 			task.wait(0.2)
 			spin:Cancel()
 		else
-			-- No intro animation: sit at final size, invisible, for LoadingTime (still
-			-- needed to detect the game/executor and let icons finish preloading),
-			-- then simply fade the whole window in.
 			main.Size = UDim2.new(0, FINAL_W, 0, FINAL_H)
 			task.wait(LOADING_TIME)
 
@@ -7088,10 +6613,14 @@ function UI.new(options)
 			task.wait(0.25)
 		end
 
-		-- Make sure every icon/image finished preloading before the Key System
-		-- content itself is loaded and shown.
-		while not iconsPreloaded do
+		local preloadStart = os.clock()
+		while not iconsPreloaded and os.clock() - preloadStart < 4 do
 			task.wait()
+		end
+
+		if KEYLESS then
+			ctx.openMain(false, "")
+			return
 		end
 
 		content.Visible = true
@@ -7099,20 +6628,13 @@ function UI.new(options)
 		task.wait(0.3)
 		state.ready = true
 
-		if KEYLESS then
-			if KL.autoconfirm and not checkingKey then
-				task.wait(0.15)
-				runKeyCheck("") -- the Callback receives an empty key in keyless mode
-			end
-		elseif SAVED_KEY and not checkingKey then
+		if SAVED_KEY and not checkingKey then
 			keyBox.Text = SAVED_KEY
 			task.wait(0.15)
 			runKeyCheck(SAVED_KEY, true)
 		end
 	end)
 
-	-- KeySystem.new(...) returns this object: :SetGetkeyTitle / :SetGetkeyIcon, and everything else
-	-- (Destroy, Enabled, Parent, ...) is forwarded to the ScreenGui.
 	local api = {}
 	function api:SetGetkeyTitle(title)
 		UI.SetGetkeyTitle(title)
@@ -7144,18 +6666,14 @@ function UI.new(options)
 		UI.SetTitleFont(font)
 		return self
 	end
-	-- OphynWindow:Tab({ Title = "...", Icon = "..." }) -> Tab (same as OphynWindow({ ... }))
 	function api:Tab(props)
 		return ctx.pages.createTab(props)
 	end
-	-- OphynWindow:Notify({ Title, Desc, Type = "info" | "success" | "warn" | "error",
-	--                      Icon = "key" | "submit" | "link" | "discord" | "close" | "moon", Duration = 3.5 })
 	function api:Notify(props)
 		props = type(props) == "table" and props or { Title = props }
 		notify(props.Title, props.Desc or props.Content or props.Message, props.Type or props.Kind, props.Icon, props.Duration)
 		return self
 	end
-	-- OphynWindow.Flags["name"] -> value of the element created with Flag = "name"
 	api.Flags = ctx.pages.flags
 	api.Gui = root
 
@@ -7184,10 +6702,18 @@ end
 local KeySystem = {}
 
 function KeySystem.new(options)
-	return import("components/window/ui").new(options)
+	local ok, result = xpcall(function()
+		return import("components/window/ui").new(options)
+	end, function(err)
+		return debug.traceback(tostring(err), 2)
+	end)
+	if not ok then
+		warn("[Ophyn] " .. tostring(result))
+		error(result, 0)
+	end
+	return result
 end
 
--- Works as KeySystem:SetGetkeyTitle("...") or KeySystem.SetGetkeyTitle("...")
 local function firstArg(a, b)
 	if a == KeySystem then
 		return b
@@ -7205,7 +6731,6 @@ function KeySystem.SetGetkeyIcon(a, b)
 	return KeySystem
 end
 
--- Works as KeySystem:SetNotifStyle("3") / KeySystem:NotifStyle("3")
 function KeySystem.SetNotifStyle(a, b)
 	import("components/window/ui").SetNotifStyle(firstArg(a, b))
 	return KeySystem
@@ -7213,8 +6738,6 @@ end
 
 KeySystem.NotifStyle = KeySystem.SetNotifStyle
 
--- Works as KeySystem:SetTabsStyle("2") / KeySystem.SetTabsStyle("2") ("1": Tabs on the left,
--- "2": Tabs in a row under the topbar), before or after KeySystem.new(...).
 function KeySystem.SetTabsStyle(a, b)
 	import("components/window/ui").SetTabsStyle(firstArg(a, b))
 	return KeySystem
@@ -7222,19 +6745,15 @@ end
 
 KeySystem.TabsStyle = KeySystem.SetTabsStyle
 
--- Works as KeySystem:GetMethod({...}) / KeySystem.GetMethod({...}), same as the
--- other Set* helpers above: usable standalone, before KeySystem.new(...) exists.
 function KeySystem.GetMethod(a, b)
 	return import("components/window/ui").GetMethod(firstArg(a, b))
 end
 
--- Works as KeySystem:SetUIFont("...") / KeySystem.SetUIFont("...")
 function KeySystem.SetUIFont(a, b)
 	import("components/window/ui").SetUIFont(firstArg(a, b))
 	return KeySystem
 end
 
--- Works as KeySystem:SetTitleFont("...") / KeySystem.SetTitleFont("...")
 function KeySystem.SetTitleFont(a, b)
 	import("components/window/ui").SetTitleFont(firstArg(a, b))
 	return KeySystem
