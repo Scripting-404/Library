@@ -178,10 +178,10 @@ __modules["utilities/jnkie"] = function()
 		self.loadError = nil
 
 		if not self.service or self.service == "" then
-			warn("[Jnkie] Service is missing â€” check your dashboard for the exact name")
+			warn("[Jnkie] Service is missing — check your dashboard for the exact name")
 		end
 		if not self.identifier or self.identifier == "" then
-			warn("[Jnkie] Identifier is missing â€” check your dashboard for your user ID")
+			warn("[Jnkie] Identifier is missing — check your dashboard for your user ID")
 		end
 
 		return self
@@ -685,7 +685,7 @@ __modules["utilities/panda"] = function()
 		self.timeLeft = nil
 
 		if self.serviceId == "" then
-			warn("[Panda] ServiceId is missing â€” check your Panda dashboard")
+			warn("[Panda] ServiceId is missing — check your Panda dashboard")
 		end
 
 		return self
@@ -891,10 +891,10 @@ local a=2^32;local b=a-1;local function c(d,e)local f,g=0,1;while d~=0 or e~=0 d
 		self.cachedTime = 0
 
 		if self.service == nil or self.service == "" then
-			warn("[Platoboost] ServiceId is missing â€” check your Platoboost dashboard")
+			warn("[Platoboost] ServiceId is missing — check your Platoboost dashboard")
 		end
 		if self.useNonce and (type(self.secret) ~= "string" or self.secret == "") then
-			warn("[Platoboost] Secret is missing â€” keys can't be verified without it")
+			warn("[Platoboost] Secret is missing — keys can't be verified without it")
 		end
 
 		return self
@@ -1748,7 +1748,35 @@ function Pages.new(ctx)
 	local MARQUEE_PAUSE = 0.7
 
 	local flags = {}
-
+	local HttpService = game:GetService("HttpService")
+	local CONFIG_FOLDER = "Ophyn-Configs"
+	local CONFIG_FILE = CONFIG_FOLDER .. "/default.json"
+	local configReady = false
+	local function saveConfig()
+		if not (writefile and makefolder) then return false end
+		local ok = pcall(function()
+			if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER)
+			elseif not isfolder then pcall(makefolder, CONFIG_FOLDER) end
+			local safe = {}
+			for k, v in pairs(flags) do
+				if type(v) == "string" or type(v) == "number" or type(v) == "boolean" then safe[tostring(k)] = v
+				elseif typeof(v) == "Color3" then safe[tostring(k)] = {__type="Color3", r=v.R, g=v.G, b=v.B}
+				elseif typeof(v) == "EnumItem" then safe[tostring(k)] = {__type="EnumItem", name=v.Name, enum=tostring(v.EnumType):gsub("Enum%.", "")} end
+			end
+			writefile(CONFIG_FILE, HttpService:JSONEncode(safe))
+		end)
+		return ok
+	end
+	local function loadConfig()
+		if not (isfile and readfile and isfile(CONFIG_FILE)) then return false end
+		local ok, decoded = pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
+		if not ok or type(decoded) ~= "table" then return false end
+		for k, v in pairs(decoded) do
+			if type(v) == "table" and v.__type == "Color3" then flags[k] = Color3.new(v.r, v.g, v.b)
+			elseif type(v) == "boolean" or type(v) == "number" or type(v) == "string" then flags[k] = v end
+		end
+		return true
+	end
 	local tintIcons = type(iconRole("muted")) == "string"
 
 	local function tintArrow(img, color)
@@ -1852,7 +1880,31 @@ function Pages.new(ctx)
 		end
 	end)
 
-	local tabsStyle = "1"
+	-- Minimize control: hides the feature window without destroying the key system.
+	local minimizeBtn = topButton(44)
+	local minimizeIcon = make("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "—",
+		TextSize = 17, TextColor3 = iconRole("muted"), FontFace = FONT, ZIndex = 6,
+	}, minimizeBtn)
+	local restoreBtn = make("TextButton", {
+		Name = "RestoreUI", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 8),
+		Size = UDim2.new(0, 36, 0, 28), BackgroundColor3 = "card", BackgroundTransparency = 0,
+		BorderSizePixel = 0, Text = "+", TextSize = 18, TextColor3 = "text", FontFace = FONT,
+		Visible = false, ZIndex = 40,
+	}, canvas)
+	make("UICorner", { CornerRadius = UDim.new(0, 7) }, restoreBtn)
+	minimizeBtn.MouseButton1Click:Connect(function()
+		page.Visible = false
+		restoreBtn.Visible = true
+	end)
+	restoreBtn.MouseButton1Click:Connect(function()
+		restoreBtn.Visible = false
+		page.Visible = true
+	end)
+	minimizeBtn.MouseEnter:Connect(function() tween(minimizeBtn, 0.12, { BackgroundTransparency = 0 }) end)
+	minimizeBtn.MouseLeave:Connect(function() tween(minimizeBtn, 0.12, { BackgroundTransparency = 1 }) end)
+
 	local function normalizeStyle(value)
 		value = tostring(value or "1"):lower()
 		if value == "2" or value == "horizontal" or value == "row" then
@@ -1889,6 +1941,60 @@ function Pages.new(ctx)
 		ClipsDescendants = true,
 	}, page)
 
+	local tabs, current = {}, nil
+	local tabsStyle = "1"
+	-- Collapsible search bar. Filters feature cards in the selected tab.
+	local searchToggle = make("TextButton", {
+		Name = "SearchToggle", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, TOPBAR_H + 5),
+		Size = UDim2.new(0, 25, 0, 25), BackgroundColor3 = "card", BackgroundTransparency = 1,
+		BorderSizePixel = 0, AutoButtonColor = false, Text = "⌕", TextSize = 20,
+		TextColor3 = "muted", FontFace = FONT, ZIndex = 8,
+	}, page)
+	make("UICorner", { CornerRadius = UDim.new(0, 6) }, searchToggle)
+	local searchBox = make("TextBox", {
+		Name = "FeatureSearch", Position = UDim2.new(0, 10, 0, TOPBAR_H + 5),
+		Size = UDim2.new(1, -48, 0, 25), BackgroundColor3 = "input", BackgroundTransparency = 0,
+		BorderSizePixel = 0, ClearTextOnFocus = false, Text = "", PlaceholderText = "Search features...",
+		PlaceholderColor3 = "muted", TextColor3 = "text", TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
+		FontFace = FONT, Visible = false, ZIndex = 8,
+	}, page)
+	make("UICorner", { CornerRadius = UDim.new(0, 6) }, searchBox)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 9), PaddingRight = UDim.new(0, 6) }, searchBox)
+	local searchOpen = false
+	local function filterFeatures()
+		local query = string.lower(searchBox.Text or "")
+		local tab = current
+		if not tab or not tab.scroll then return end
+		for _, item in ipairs(tab.scroll:GetChildren()) do
+			if item:IsA("GuiObject") and item.Name == "Element" then
+				local haystack = item.Name
+				for _, desc in ipairs(item:GetDescendants()) do
+					if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+						haystack ..= " " .. (desc.Text or "")
+					end
+				end
+				item.Visible = query == "" or string.find(string.lower(haystack), query, 1, true) ~= nil
+			end
+		end
+	end
+	searchToggle.MouseButton1Click:Connect(function()
+		searchOpen = not searchOpen
+		searchBox.Visible = searchOpen
+		local rowTabs = tabsStyle == "2"
+		local baseY = rowTabs and (TOPBAR_H + TABS_BAR_H + 1) or (TOPBAR_H + 1)
+		local baseH = rowTabs and (H - TOPBAR_H - TABS_BAR_H - 1) or (H - TOPBAR_H - 1)
+		holder.Position = UDim2.new(holder.Position.X.Scale, holder.Position.X.Offset, 0, baseY + (searchOpen and 34 or 0))
+		holder.Size = UDim2.new(holder.Size.X.Scale, holder.Size.X.Offset, 0, baseH - (searchOpen and 34 or 0))
+		if searchOpen then
+			searchBox:CaptureFocus()
+		else
+			searchBox:ReleaseFocus()
+			searchBox.Text = ""
+			filterFeatures()
+		end
+	end)
+	searchBox:GetPropertyChangedSignal("Text"):Connect(filterFeatures)
+
 	sidebar.InputChanged:Connect(function(input)
 		if tabsStyle == "2" and input.UserInputType == Enum.UserInputType.MouseWheel then
 			local maxX = math.max(0, sidebar.AbsoluteCanvasSize.X - sidebar.AbsoluteWindowSize.X)
@@ -1896,9 +2002,6 @@ function Pages.new(ctx)
 			sidebar.CanvasPosition = Vector2.new(math.clamp(x, 0, maxX), 0)
 		end
 	end)
-
-	local tabs = {}
-	local current = nil
 
 	local function applyTabsStyle()
 		local row = tabsStyle == "2"
@@ -1960,8 +2063,38 @@ function Pages.new(ctx)
 		end)
 	end
 
+	local confirmLayer = make("Frame", {
+		Name = "CloseConfirm", Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 0.35, BorderSizePixel = 0, Visible = false, ZIndex = 100,
+	}, page)
+	local confirmCard = make("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(0, 230, 0, 112), BackgroundColor3 = "card", BorderSizePixel = 0, ZIndex = 101,
+	}, confirmLayer)
+	make("UICorner", { CornerRadius = UDim.new(0, 10) }, confirmCard)
+	make("TextLabel", {
+		Position = UDim2.new(0, 12, 0, 12), Size = UDim2.new(1, -24, 0, 24), BackgroundTransparency = 1,
+		Text = "Close Ophyn UI?", TextColor3 = "text", TextSize = 15, FontFace = FONT_BOLD,
+		TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 102,
+	}, confirmCard)
+	make("TextLabel", {
+		Position = UDim2.new(0, 12, 0, 38), Size = UDim2.new(1, -24, 0, 18), BackgroundTransparency = 1,
+		Text = "Are you sure you want to close it?", TextColor3 = "muted", TextSize = 11, FontFace = FONT,
+		TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 102,
+	}, confirmCard)
+	local cancelClose = make("TextButton", {
+		Position = UDim2.new(0, 12, 1, -36), Size = UDim2.new(0.5, -7, 0, 25), BackgroundColor3 = "btn2",
+		BorderSizePixel = 0, Text = "Cancel", TextColor3 = "text", TextSize = 12, FontFace = FONT, ZIndex = 102,
+	}, confirmCard)
+	local acceptClose = make("TextButton", {
+		Position = UDim2.new(0.5, 2, 1, -36), Size = UDim2.new(0.5, -14, 0, 25), BackgroundColor3 = "accent",
+		BorderSizePixel = 0, Text = "Close", TextColor3 = "text", TextSize = 12, FontFace = FONT, ZIndex = 102,
+	}, confirmCard)
+	for _, b in ipairs({cancelClose, acceptClose}) do make("UICorner", { CornerRadius = UDim.new(0, 6) }, b) end
+	cancelClose.MouseButton1Click:Connect(function() confirmLayer.Visible = false end)
+	acceptClose.MouseButton1Click:Connect(function() confirmLayer.Visible = false; ctx.requestClose() end)
 	closeBtn.MouseButton1Click:Connect(function()
-		ctx.requestClose()
+		confirmLayer.Visible = true
 	end)
 
 	local function styleTab(tab, on)
@@ -2103,6 +2236,7 @@ function Pages.new(ctx)
 		local function setFlag(p, value)
 			if p.Flag ~= nil then
 				flags[p.Flag] = value
+				if configReady then task.defer(saveConfig) end
 			end
 		end
 
@@ -3762,9 +3896,13 @@ function Pages.new(ctx)
 		fade(items, 1, 0.5)
 	end
 
+	loadConfig()
+	configReady = true
 	return {
 		createTab = createTab,
 		flags = flags,
+		SaveConfig = saveConfig,
+		LoadConfig = loadConfig,
 		showDirect = showDirect,
 		fadeOut = fadeOut,
 		count = function()
@@ -5035,6 +5173,7 @@ function UI.new(options)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 	}, root)
 
 	local shadow = make("ImageLabel", {
@@ -6830,7 +6969,8 @@ function UI.new(options)
 		local vx = (winPos.X - prevX) / math.max(dt, 1e-4)
 		velX = velX + (vx - velX) * (1 - math.exp(-18 * dt))
 
-		local tiltTarget = math.clamp(velX * TILT_GAIN, -TILT_MAX, TILT_MAX)
+		-- Keep the window axis-aligned while dragging so text/controls cannot protrude outside its bounds.
+		local tiltTarget = dragging and 0 or math.clamp(velX * TILT_GAIN, -TILT_MAX, TILT_MAX)
 		local acc = (tiltTarget - tilt) * TILT_STIFFNESS - tiltVel * TILT_DAMPING
 		tiltVel = tiltVel + acc * dt
 		tilt = tilt + tiltVel * dt
@@ -7043,6 +7183,12 @@ function UI.new(options)
 		return self
 	end
 	api.Flags = ctx.pages.flags
+	function api:SaveConfig()
+		return ctx.pages.SaveConfig and ctx.pages.SaveConfig() or false
+	end
+	function api:LoadConfig()
+		return ctx.pages.LoadConfig and ctx.pages.LoadConfig() or false
+	end
 	api.Gui = root
 
 	return setmetatable(api, {
