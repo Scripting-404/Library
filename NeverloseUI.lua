@@ -18649,7 +18649,7 @@ function NeverloseUI:CreateLogger()
 		end;
 		Item.Number.Text = Commas(Stats.Total);
 		Item.Title.Text = tostring(Stats.Title or Stats.Label);
-		Item.Footer.Text = Commas(Stats.Total) .. " " .. tostring(Stats.Label) .. " · last " .. tostring(#Stats.Series) .. " days";
+		Item.Footer.Text = Commas(Stats.Total) .. " " .. tostring(Stats.Label) .. " · last " .. tostring(#Stats.Series) .. " days" .. (Stats.Remote and " · live" or "");
 	end;
 	local function Redraw()
 		local Alive = {};
@@ -18822,6 +18822,7 @@ function NeverloseUI:CreateLogger()
 	end);
 	NeverloseUI.StatsUrl = NeverloseUI.StatsUrl or "https://pasteblox.com/s/3ut4st3kq9";
 	local function Fetch(Url)
+		Url = Url .. (string.find(Url, "?", 1, true) and "&" or "?") .. "_=" .. tostring(os.time());
 		local Ok, Body = pcall(function()
 			return game:HttpGet(Url);
 		end);
@@ -18911,28 +18912,6 @@ function NeverloseUI:CreateLogger()
 	end;
 	local function ParseHtml(Body)
 		local Result = {};
-		Body = (string.gsub(Body, "<!%-%-.-%-%->", ""));
-		for Block in string.gmatch(Body, "<script[^>]*>(.-)</script>") do
-			local Flat = (string.gsub(Block, '\\"', '"'));
-			if not Result.Total then
-				local Number = string.match(Flat, '"[%w_]*[Rr]un[%w_]*":%s*(%d+)');
-				if Number then
-					Result.Total = tonumber(Number);
-				end;
-			end;
-			if not Result.Series then
-				for Name, Inner in string.gmatch(Flat, '"([%w_]*)":%[([%d,%s%.]+)%]') do
-					local List = {};
-					for Value in string.gmatch(Inner, "[%d%.]+") do
-						table.insert(List, tonumber(Value));
-					end;
-					if #List >= 7 and #List <= 120 then
-						Result.Series = List;
-						break;
-					end;
-				end;
-			end;
-		end;
 		for Block in string.gmatch(Body, "<script[^>]*>(.-)</script>") do
 			for Json in string.gmatch(Block, "(%b{})") do
 				if #Json > 20 and #Json < 200000 then
@@ -18980,7 +18959,7 @@ function NeverloseUI:CreateLogger()
 		end;
 		if not Result.Series then
 			local Heights = {};
-			for Number in string.gmatch(Segment, "height:%s*([%d%.]+)%%?p?x?") do
+			for Number in string.gmatch(Segment, "height:%s*([%d%.]+)%%") do
 				table.insert(Heights, tonumber(Number));
 			end;
 			if #Heights >= 7 then
@@ -18992,33 +18971,54 @@ function NeverloseUI:CreateLogger()
 		end;
 		return nil;
 	end;
-	function Logging.GetStatsSourceBody(Url)
-		return Fetch(Url or NeverloseUI.StatsUrl);
+	function Logging.ParsePasteblox(Body)
+		if type(Body) ~= "string" then
+			return nil;
+		end;
+		local Start, Finish, Count, Range = string.find(Body, 'aria%-label="(%d[%d,]*) runs in the last (%d+) days"');
+		if not Start then
+			Start, Finish, Count = string.find(Body, 'aria%-label="(%d[%d,]*) runs?');
+		end;
+		if not Start then
+			return nil;
+		end;
+		local Total = tonumber((string.gsub(Count, ",", "")));
+		local Days = tonumber(Range) or 30;
+		local Segment = string.sub(Body, Finish, Finish + 60000);
+		local Heights = {};
+		for Value in string.gmatch(Segment, 'style="height:([%d%.]+)%%"') do
+			table.insert(Heights, tonumber(Value) or 0);
+			if #Heights >= Days then
+				break;
+			end;
+		end;
+		local Series = nil;
+		if #Heights >= 7 then
+			-- The site draws each bar as max(5%, count / peak). Rebuild the daily counts from
+			-- the exact total so the numbers add back up to what the page shows.
+			local Weight = 0;
+			for _, Height in ipairs(Heights) do
+				if Height > 5.001 then
+					Weight = Weight + Height / 100;
+				end;
+			end;
+			local Peak = (Total and Weight > 0) and (Total / Weight) or 100;
+			Series = {};
+			for _, Height in ipairs(Heights) do
+				table.insert(Series, Height > 5.001 and math.floor(Height / 100 * Peak + 0.5) or 0);
+			end;
+		end;
+		if Total or Series then
+			return { Total = Total, Series = Series };
+		end;
+		return nil;
 	end;
-	local function ParseAny(Url)
+	function Logging.FetchRemoteStats(Url)
 		local Body = Fetch(Url);
 		if not Body then
 			return nil;
 		end;
-		return ParseJson(Body) or ParseHtml(Body);
-	end;
-	function Logging.FetchRemoteStats(Url)
-		local Parsed = ParseAny(Url);
-		if not Parsed then
-			local Id = string.match(Url, "/s/([%w]+)");
-			if Id then
-				for _, Candidate in ipairs({
-					"https://pasteblox.com/api/s/" .. Id,
-					"https://pasteblox.com/api/scripts/" .. Id .. "/stats",
-					"https://pasteblox.com/s/" .. Id .. ".json",
-				}) do
-					Parsed = ParseAny(Candidate);
-					if Parsed then
-						break;
-					end;
-				end;
-			end;
-		end;
+		local Parsed = Logging.ParsePasteblox(Body) or ParseJson(Body) or ParseHtml(Body);
 		if not Parsed then
 			return nil;
 		end;
@@ -19039,66 +19039,6 @@ function NeverloseUI:CreateLogger()
 		end;
 		return { Total = Total, Series = Series, Label = "runs", Title = "runs" };
 	end;
-	function Logging.ProbeStats(Url)
-		Url = Url or NeverloseUI.StatsUrl;
-		local Id = string.match(Url, "/s/([%w]+)") or "";
-		local List = {
-			Url,
-			"https://pasteblox.com/docs/rest-api",
-			"https://pasteblox.com/docs/api",
-			"https://pasteblox.com/api/s/" .. Id,
-			"https://pasteblox.com/api/scripts/" .. Id,
-			"https://pasteblox.com/api/scripts/" .. Id .. "/stats",
-			"https://pasteblox.com/api/v1/scripts/" .. Id,
-			"https://pasteblox.com/api/v1/scripts/" .. Id .. "/stats",
-			"https://pasteblox.com/s/" .. Id .. ".json",
-		};
-		local Requester = request or http_request or (syn and syn.request);
-		local Lines = {};
-		for _, Target in ipairs(List) do
-			local Status, Length, Snippet, Found = "?", 0, "", "no";
-			local Body = nil;
-			if Requester then
-				local Ok, Response = pcall(function()
-					return Requester({ Url = Target, Method = "GET", Headers = { ["User-Agent"] = "Mozilla/5.0", ["Accept"] = "text/html,application/json" } });
-				end);
-				if Ok and type(Response) == "table" then
-					Status = tostring(Response.StatusCode or "?");
-					Body = type(Response.Body) == "string" and Response.Body or nil;
-				else
-					Status = "error";
-				end;
-			else
-				local Ok, Result = pcall(function()
-					return game:HttpGet(Target);
-				end);
-				Status = Ok and "200" or "error";
-				Body = Ok and Result or nil;
-			end;
-			if Body then
-				Length = #Body;
-				Snippet = string.gsub(string.sub(Body, 1, 160), "%s+", " ");
-				local Parsed = ParseJson(Body) or ParseHtml(Body);
-				if Parsed then
-					Found = "yes total=" .. tostring(Parsed.Total) .. " days=" .. tostring(Parsed.Series and #Parsed.Series or 0);
-				end;
-			end;
-			table.insert(Lines, Target .. "\n  status=" .. Status .. " length=" .. tostring(Length) .. " data=" .. Found .. "\n  " .. Snippet);
-			if Body then
-				local Paths, Seen = {}, {};
-				for Path in string.gmatch(Body, "/api/[%w/_%-%.{}:]+") do
-					if not Seen[Path] and #Paths < 30 then
-						Seen[Path] = true;
-						table.insert(Paths, Path);
-					end;
-				end;
-				if #Paths > 0 then
-					table.insert(Lines, "  api paths: " .. table.concat(Paths, ", "));
-				end;
-			end;
-		end;
-		return table.concat(Lines, "\n");
-	end;
 	function Logging.SetStatsSource(Url, Interval)
 		if type(Url) ~= "string" or Url == "" then
 			return;
@@ -19114,16 +19054,21 @@ function NeverloseUI:CreateLogger()
 			end;
 			if Data then
 				Stats.Custom = true;
-				Redraw();
+				Stats.Remote = true;
+				local Signature = tostring(Stats.Total) .. ":" .. table.concat(Stats.Series, ",");
+				if Signature ~= Stats.Signature then
+					Stats.Signature = Signature;
+					Redraw();
+				end;
 			end;
 			return nil;
-		end, Interval or 120);
+		end, Interval or 30);
 	end;
 	pcall(function()
 		NeverloseUI:RecordExecution();
 	end);
 	Logging.RefreshStats();
-	Logging.SetStatsSource(NeverloseUI.StatsUrl, 120);
+	Logging.SetStatsSource(NeverloseUI.StatsUrl, 30);
 	return CaseInsensitive(Logging)
 end;
 function NeverloseUI:CreateIndicator()
@@ -20691,50 +20636,6 @@ function NeverloseUI:BuildExtendedSettings(Window)
 				NeverloseUI.UISettings = {};
 				NeverloseUI:_WriteJson(NeverloseUI.UISettingsPath, {});
 				Notifier.new({ Title = "UI Settings", Content = "Reset. Re-execute to apply.", Type = "Warning", Duration = 4 });
-			end,
-		});
-		Sec:AddButton({
-			Name = "Test Stats Source",
-			Icon = "lucide:activity",
-			Callback = function()
-				task.spawn(function()
-					local Data = Logging.FetchRemoteStats(NeverloseUI.StatsUrl);
-					if Data and (Data.Total or Data.Series) then
-						Notifier.new({ Title = "Stats Source", Content = "Total " .. Logging.FormatNumber(Data.Total or 0) .. ", " .. tostring(Data.Series and #Data.Series or 0) .. " days", Type = "Success", Duration = 4 });
-					else
-						Notifier.new({ Title = "Stats Source", Content = "No readable data found.", Type = "Error", Duration = 4 });
-					end;
-				end);
-			end,
-		});
-		Sec:AddButton({
-			Name = "Probe Stats Source",
-			Icon = "lucide:search",
-			Callback = function()
-				task.spawn(function()
-					local Report = Logging.ProbeStats(NeverloseUI.StatsUrl);
-					pcall(function()
-						setclipboard(Report);
-					end);
-					Notifier.new({ Title = "Stats Probe", Content = "Report copied. Paste it to continue.", Type = "Info", Duration = 5 });
-				end);
-			end,
-		});
-		Sec:AddButton({
-			Name = "Copy Stats Source Page",
-			Icon = "lucide:copy",
-			Callback = function()
-				task.spawn(function()
-					local Body = Logging.GetStatsSourceBody(NeverloseUI.StatsUrl);
-					if Body then
-						pcall(function()
-							setclipboard(string.sub(Body, 1, 80000));
-						end);
-						Notifier.new({ Title = "Stats Source", Content = "Page source copied.", Type = "Info", Duration = 3 });
-					else
-						Notifier.new({ Title = "Stats Source", Content = "Could not load the page.", Type = "Error", Duration = 3 });
-					end;
-				end);
 			end,
 		});
 		Sec:AddButton({
