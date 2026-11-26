@@ -18613,6 +18613,18 @@ function NeverloseUI:CreateLogger()
 		return (NeverloseUI:GetTheme().Placeholder) or Color3.fromRGB(140, 140, 155);
 	end;
 	local function RedrawCard(Item)
+		if Stats.Pending then
+			for _, Bar in ipairs(Item.Bars) do
+				pcall(function()
+					Bar:Destroy();
+				end);
+			end;
+			Item.Bars = {};
+			Item.Number.Text = "-";
+			Item.Title.Text = tostring(Stats.Title or Stats.Label);
+			Item.Footer.Text = tostring(Stats.Status or "connecting...");
+			return;
+		end;
 		local Count = math.max(1, #Stats.Series);
 		local Maximum = 1;
 		for _, Value in ipairs(Stats.Series) do
@@ -18823,21 +18835,36 @@ function NeverloseUI:CreateLogger()
 	NeverloseUI.StatsUrl = NeverloseUI.StatsUrl or "https://pasteblox.com/s/3ut4st3kq9";
 	local function Fetch(Url)
 		Url = Url .. (string.find(Url, "?", 1, true) and "&" or "?") .. "_=" .. tostring(os.time());
+		Logging.LastFetchError = nil;
+		local Requester = request or http_request or (syn and syn.request);
+		if Requester then
+			local Got, Response = pcall(function()
+				return Requester({
+					Url = Url,
+					Method = "GET",
+					Headers = {
+						["User-Agent"] = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36",
+						["Accept"] = "text/html,application/xhtml+xml",
+						["Cache-Control"] = "no-cache",
+					},
+				});
+			end);
+			if Got and type(Response) == "table" then
+				if type(Response.Body) == "string" and #Response.Body > 0 and (Response.StatusCode == nil or Response.StatusCode < 400) then
+					return Response.Body;
+				end;
+				Logging.LastFetchError = "HTTP " .. tostring(Response.StatusCode or "?");
+			else
+				Logging.LastFetchError = "request blocked";
+			end;
+		end;
 		local Ok, Body = pcall(function()
 			return game:HttpGet(Url);
 		end);
 		if Ok and type(Body) == "string" and #Body > 0 then
 			return Body;
 		end;
-		local Requester = request or http_request or (syn and syn.request);
-		if Requester then
-			local Got, Response = pcall(function()
-				return Requester({ Url = Url, Method = "GET", Headers = { ["User-Agent"] = "Mozilla/5.0", ["Accept"] = "text/html,application/json" } });
-			end);
-			if Got and type(Response) == "table" and type(Response.Body) == "string" and #Response.Body > 0 then
-				return Response.Body;
-			end;
-		end;
+		Logging.LastFetchError = Logging.LastFetchError or "HttpGet failed";
 		return nil;
 	end;
 	local TotalKeys = { "runs", "run_count", "runCount", "total_runs", "totalRuns", "executions", "total" };
@@ -18980,6 +19007,9 @@ function NeverloseUI:CreateLogger()
 			Start, Finish, Count = string.find(Body, 'aria%-label="(%d[%d,]*) runs?');
 		end;
 		if not Start then
+			Start, Finish, Count = string.find(Body, '>runs</p><p[^>]*>(%d[%d,]*)</p>');
+		end;
+		if not Start then
 			return nil;
 		end;
 		local Total = tonumber((string.gsub(Count, ",", "")));
@@ -19020,6 +19050,7 @@ function NeverloseUI:CreateLogger()
 		end;
 		local Parsed = Logging.ParsePasteblox(Body) or ParseJson(Body) or ParseHtml(Body);
 		if not Parsed then
+			Logging.LastFetchError = "unreadable page (" .. tostring(#Body) .. " bytes)";
 			return nil;
 		end;
 		local Series = Parsed.Series;
@@ -19044,6 +19075,9 @@ function NeverloseUI:CreateLogger()
 			return;
 		end;
 		NeverloseUI.StatsUrl = Url;
+		Stats.Pending = true;
+		Stats.Status = "connecting...";
+		Redraw();
 		Logging.SetStatsProvider(function()
 			local Data = Logging.FetchRemoteStats(Url);
 			if Data and Data.Series then
@@ -19052,9 +19086,19 @@ function NeverloseUI:CreateLogger()
 			if Data and Data.Total then
 				Stats.Total = Data.Total;
 			end;
+			if not Data then
+				Stats.Status = tostring(Logging.LastFetchError or "offline");
+				if Stats.Pending then
+					Redraw();
+				end;
+			end;
 			if Data then
 				Stats.Custom = true;
 				Stats.Remote = true;
+				if Stats.Pending then
+					Stats.Pending = false;
+					Stats.Signature = nil;
+				end;
 				local Signature = tostring(Stats.Total) .. ":" .. table.concat(Stats.Series, ",");
 				if Signature ~= Stats.Signature then
 					Stats.Signature = Signature;
